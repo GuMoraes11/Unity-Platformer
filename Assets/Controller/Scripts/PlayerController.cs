@@ -4,6 +4,30 @@ using UnityEngine;
 
 namespace TarodevController
 {
+    /// <summary>
+    /// PlayerController — core character-movement controller.
+    ///
+    /// Responsibilities:
+    ///   Ground movement, slopes, jumping (coyote / buffered / wall / air),
+    ///   dashing, crouching, ladder climbing, wall-grab/slide, and
+    ///   moving-platform (transient velocity) support.
+    ///
+    /// Tick order (driven by PhysicsSimulator singleton, NOT Unity messages):
+    ///   TickUpdate(delta, time)      — called from Update; gathers input only.
+    ///   TickFixedUpdate(delta)       — called from FixedUpdate; runs the full
+    ///       simulation: collisions → direction → walls → ladders → jump →
+    ///       dash → external modifiers → trace ground → move → crouch → cleanup.
+    ///   Input is sampled in TickUpdate and consumed in TickFixedUpdate.
+    ///   _time originates from the Update tick but is used for timing windows
+    ///   (jump buffer, coyote, dash cooldown) during the Fixed tick — intentional.
+    ///
+    /// Key invariants:
+    ///   • Requires a PlayerStats ScriptableObject (50 public tuning fields).
+    ///   • Registers itself with PhysicsSimulator.Instance.AddPlayer(this) on Awake.
+    ///   • Uses two colliders: BoxCollider2D (grounded/crouch) and CapsuleCollider2D
+    ///     (airborne). See SetColliderMode() and the "Two-Collider Mode" comment.
+    ///   • Mutates global Physics2D query flags — see "GLOBAL PHYSICS2D FLAGS" TODOs.
+    /// </summary>
     [RequireComponent(typeof(Rigidbody2D), typeof(BoxCollider2D), typeof(CapsuleCollider2D))]
     public class PlayerController : MonoBehaviour, IPlayerController, IPhysicsObject
     {
@@ -107,6 +131,24 @@ namespace TarodevController
             GatherInput();
         }
 
+        // ── Frame lifecycle ──────────────────────────────────────────────
+        // Each phase below depends on the results of the previous one.
+        // DO NOT reorder these calls without understanding the full chain:
+        //   1. RemoveTransientVelocity — strip last frame's platform velocity
+        //   2. SetFrameData            — snapshot position/velocity for this tick
+        //   3. CalculateCollisions     — ground raycasts (mutates global Physics2D flags!)
+        //   4. CalculateDirection      — derive slope-aware move direction
+        //   5. CalculateWalls          — wall detection & grab state
+        //   6. CalculateLadders        — ladder overlap (mutates global Physics2D flags!)
+        //   7. CalculateJump           — consume jump input, apply forces
+        //   8. CalculateDash           — consume dash input, set dash velocity
+        //   9. CalculateExternalModifiers — speed modifier zones
+        //  10. TraceGround             — platform tracking & transient velocity
+        //  11. Move                    — final velocity resolution
+        //  12. CalculateCrouch         — collider resize (must follow Move)
+        //  13. CleanFrameData          — reset per-frame flags
+        //  14. SaveCharacterState      — persist state for next frame
+        // ──────────────────────────────────────────────────────────────────
         public void TickFixedUpdate(float delta)
         {
             _delta = delta;
@@ -141,6 +183,14 @@ namespace TarodevController
 
         #region Setup
 
+        // TODO [GLOBAL PHYSICS2D FLAGS] — These cache Unity's global Physics2D query statics so we
+        // can restore them after temporarily overriding them in CalculateCollisions(), CalculateLadders(),
+        // and CheckPos(). BUGS:
+        //   1. _cachedQueryTriggers is never initialised (should be set in SetupCharacter alongside
+        //      _cachedQueryMode, e.g. _cachedQueryTriggers = Physics2D.queriesHitTriggers).
+        //   2. CheckPos() restores queriesHitTriggers to _cachedQueryMode (wrong variable — should
+        //      use _cachedQueryTriggers). This silently corrupts the global flag.
+        // Fix: cache both flags in SetupCharacter/Awake and restore the correct one in each method.
         private bool _cachedQueryMode, _cachedQueryTriggers;
         private GeneratedCharacterSize _character;
         private const float GRAVITY_SCALE = 1;
@@ -255,6 +305,16 @@ namespace TarodevController
 
         #region Collisions
 
+        // ── Grounding & slope model ──────────────────────────────────────
+        // CalculateCollisions() fires a centre ray downward; if it misses, it
+        // zig-zags outward (RAY_SIDE_COUNT offsets) until a hit is found.
+        // A hit is accepted only if its normal angle vs Up < Stats.MaxWalkableSlope.
+        //
+        // CalculateDirection() then derives the slope-aware move direction:
+        //   _frameDirection.y = inputX * (-groundNormal.x / groundNormal.y)
+        // This is NOT an angle — it's the slope-direction component so the
+        // character follows the surface rather than sliding off.
+        // ──────────────────────────────────────────────────────────────────
         private const float SKIN_WIDTH = 0.02f;
         private const int RAY_SIDE_COUNT = 5;
         private RaycastHit2D _groundHit;
@@ -264,6 +324,8 @@ namespace TarodevController
 
         private Vector2 RayPoint => _framePosition + Up * (_character.StepHeight + SKIN_WIDTH);
 
+        // WARNING: Mutates global Physics2D.queriesStartInColliders. Restored to _cachedQueryMode
+        // at the end of this method. See "GLOBAL PHYSICS2D FLAGS" TODO above for known issues.
         private void CalculateCollisions()
         {
             Physics2D.queriesStartInColliders = false;
@@ -313,6 +375,9 @@ namespace TarodevController
         private void ToggleGrounded(bool grounded)
         {
             _grounded = grounded;
+            // NOTE: "Blue" tag → slippery surface. This is game-design logic embedded in the
+            // controller. Renaming the tag or reusing "Blue" for non-slippery objects will
+            // silently break friction/deceleration feel. Keep tags stable or extract to config.
             if (grounded && _groundHit.collider != null) {
                 if (_groundHit.collider.CompareTag("Blue")) {
                     _onSlipperySurface = true;
@@ -342,6 +407,15 @@ namespace TarodevController
             }
         }
 
+        // ── Two-Collider Mode ──────────────────────────────────────────
+        // Design decision: BoxCollider2D is used for grounded/crouching states
+        // (better edge behaviour on slopes, predictable ceiling checks via CanStand).
+        // CapsuleCollider2D is used for airborne state (smoother collision response
+        // against corners/ledges while falling or jumping).
+        // Switching happens in ToggleGrounded() and CalculateCrouch().
+        // This affects: ceiling checks, friction/material behaviour, and slope
+        // collision edge behaviour. Change with care.
+        // ──────────────────────────────────────────────────────────────────
         private void SetColliderMode(ColliderMode mode)
         {
             _airborneCollider.enabled = mode == ColliderMode.Airborne;
@@ -479,6 +553,8 @@ namespace TarodevController
         private Collider2D _ladderHit;
         private float _ladderSnapVel;
 
+        // WARNING: Mutates global Physics2D.queriesHitTriggers. Restored to _cachedQueryTriggers,
+        // but _cachedQueryTriggers is never initialised — see "GLOBAL PHYSICS2D FLAGS" TODO.
         private void CalculateLadders()
         {
             if (!Stats.AllowLadders) return;
@@ -674,12 +750,15 @@ namespace TarodevController
             SetColliderMode(Crouching ? ColliderMode.Crouching : ColliderMode.Standard);
         }
 
+        // TODO [GLOBAL PHYSICS2D FLAGS] — BUG: restores queriesHitTriggers to _cachedQueryMode
+        // instead of _cachedQueryTriggers. This means after CheckPos runs, queriesHitTriggers
+        // is set to the cached value of queriesStartInColliders — silent global state corruption.
         private bool CheckPos(Vector2 pos, Vector2 size)
         {
             Physics2D.queriesHitTriggers = false;
             var hit = Physics2D.OverlapBox(pos, size, 0, Stats.CollisionLayers);
             //var hit = Physics2D.OverlapCapsule(pos, size - new Vector2(SKIN_WIDTH, 0), _collider.direction, 0, ~Stats.PlayerLayer);
-            Physics2D.queriesHitTriggers = _cachedQueryMode;
+            Physics2D.queriesHitTriggers = _cachedQueryMode; // BUG: should be _cachedQueryTriggers
             return !hit;
         }
 
@@ -687,6 +766,28 @@ namespace TarodevController
 
         #region Move
 
+        // ── Transient velocity / platform system ─────────────────────────
+        // _frameTransientVelocity      — velocity added THIS frame to keep the player
+        //                                attached to a moving platform (or to correct
+        //                                ground distance). Stripped at the start of the
+        //                                next TickFixedUpdate by RemoveTransientVelocity().
+        // _decayingTransientVelocity   — "launch" velocity inherited when leaving a
+        //                                platform; decays over time via ExternalVelocityDecayRate.
+        // _immediateMove               — direct position offset (MovePosition path) used
+        //                                when Stats.PositionCorrectionMode != Velocity.
+        // _totalTransientVelocityAppliedLastFrame — bookkeeping: sum of transient +
+        //                                decaying velocity applied last frame, so it can
+        //                                be subtracted cleanly next frame.
+        //
+        // Movers enter _activatedMovers in two ways:
+        //   1. Ground contact — TraceGround() adds the platform when grounded on it.
+        //   2. Trigger overlap — OnTriggerEnter2D() adds movers that don't require grounding.
+        // Movers are removed via OnTriggerExit2D (bounding movers) or TraceGround (contact-only).
+        //
+        // Velocity correction vs MovePosition:
+        //   Stats.PositionCorrectionMode selects the strategy. Velocity is smoother with
+        //   interpolation; MovePosition is pixel-exact but not interpolated.
+        // ──────────────────────────────────────────────────────────────────
         private Vector2 _frameTransientVelocity;
         private Vector2 _immediateMove;
         private Vector2 _decayingTransientVelocity;
@@ -749,6 +850,17 @@ namespace TarodevController
             _decayingTransientVelocity += platformVel;
         }
 
+        // ── Movement model ──────────────────────────────────────────────
+        // Move() resolves final velocity via early-return branches (order matters):
+        //   1. Force impulse (jump) — if _forceToApplyThisFrame != 0, apply impulse
+        //      and return immediately for crisp/reliable slope jumps.
+        //   2. Dash — if _dashing, set velocity to _dashVel and return.
+        //   3. Wall grab — if _isOnWall, compute wall climb/slide velocity and return.
+        //   4. Ladder — if ClimbingLadder, compute ladder velocity and return.
+        //   5. Normal grounded/airborne — gravity, acceleration/friction, slope blending.
+        // Adding new movement features? Insert a branch here and be aware that
+        // earlier branches take priority (e.g. dash overrides wall).
+        // ──────────────────────────────────────────────────────────────────
         private void Move()
         {
             if (_forceToApplyThisFrame != Vector2.zero)
