@@ -183,22 +183,12 @@ namespace TarodevController
 
         #region Setup
 
-        // TODO [GLOBAL PHYSICS2D FLAGS] — These cache Unity's global Physics2D query statics so we
-        // can restore them after temporarily overriding them in CalculateCollisions(), CalculateLadders(),
-        // and CheckPos(). BUGS:
-        //   1. _cachedQueryTriggers is never initialised (should be set in SetupCharacter alongside
-        //      _cachedQueryMode, e.g. _cachedQueryTriggers = Physics2D.queriesHitTriggers).
-        //   2. CheckPos() restores queriesHitTriggers to _cachedQueryMode (wrong variable — should
-        //      use _cachedQueryTriggers). This silently corrupts the global flag.
-        // Fix: cache both flags in SetupCharacter/Awake and restore the correct one in each method.
-        private bool _cachedQueryMode, _cachedQueryTriggers;
         private GeneratedCharacterSize _character;
         private const float GRAVITY_SCALE = 1;
 
         private void SetupCharacter()
         {
             _character = Stats.CharacterSize.GenerateCharacterSize();
-            _cachedQueryMode = Physics2D.queriesStartInColliders;
 
             _wallDetectionBounds = new Bounds(
                 new Vector3(0, _character.Height / 2),
@@ -228,6 +218,9 @@ namespace TarodevController
 
         #region Input
 
+        // TODO(MULTI_INPUT): Controller must remain fed by per-player FrameInput; do not read
+        // global devices here. For 2-player support, a separate per-player input binding script
+        // should pair devices/control schemes and feed FrameInput into the local PlayerInput component.
         private FrameInput _frameInput;
 
         private void GatherInput()
@@ -324,29 +317,36 @@ namespace TarodevController
 
         private Vector2 RayPoint => _framePosition + Up * (_character.StepHeight + SKIN_WIDTH);
 
-        // WARNING: Mutates global Physics2D.queriesStartInColliders. Restored to _cachedQueryMode
-        // at the end of this method. See "GLOBAL PHYSICS2D FLAGS" TODO above for known issues.
+        // TODO(MULTI_PHYS): CalculateCollisions toggles global Physics2D.queriesStartInColliders.
+        // Prefer ContactFilter2D overloads to avoid cross-player interference when multiple
+        // controllers run in the same scene.
         private void CalculateCollisions()
         {
-            Physics2D.queriesStartInColliders = false;
-
-            // Is the middle ray good?
-            var isGroundedThisFrame = PerformRay(RayPoint);
-
-            // If not, zigzag rays from the center outward until we find a hit
-            if (!isGroundedThisFrame)
+            var prevQueryStartIn = Physics2D.queriesStartInColliders;
+            try
             {
-                foreach (var offset in GenerateRayOffsets())
+                Physics2D.queriesStartInColliders = false;
+
+                // Is the middle ray good?
+                var isGroundedThisFrame = PerformRay(RayPoint);
+
+                // If not, zigzag rays from the center outward until we find a hit
+                if (!isGroundedThisFrame)
                 {
-                    isGroundedThisFrame = PerformRay(RayPoint + Right * offset) || PerformRay(RayPoint - Right * offset);
-                    if (isGroundedThisFrame) break;
+                    foreach (var offset in GenerateRayOffsets())
+                    {
+                        isGroundedThisFrame = PerformRay(RayPoint + Right * offset) || PerformRay(RayPoint - Right * offset);
+                        if (isGroundedThisFrame) break;
+                    }
                 }
+
+                if (isGroundedThisFrame && !_grounded) ToggleGrounded(true);
+                else if (!isGroundedThisFrame && _grounded) ToggleGrounded(false);
             }
-
-            if (isGroundedThisFrame && !_grounded) ToggleGrounded(true);
-            else if (!isGroundedThisFrame && _grounded) ToggleGrounded(false);
-
-            Physics2D.queriesStartInColliders = _cachedQueryMode;
+            finally
+            {
+                Physics2D.queriesStartInColliders = prevQueryStartIn;
+            }
 
             bool PerformRay(Vector2 point)
             {
@@ -553,16 +553,23 @@ namespace TarodevController
         private Collider2D _ladderHit;
         private float _ladderSnapVel;
 
-        // WARNING: Mutates global Physics2D.queriesHitTriggers. Restored to _cachedQueryTriggers,
-        // but _cachedQueryTriggers is never initialised — see "GLOBAL PHYSICS2D FLAGS" TODO.
+        // TODO(MULTI_PHYS): CalculateLadders toggles global Physics2D.queriesHitTriggers.
+        // Prefer ContactFilter2D overloads to avoid cross-player interference when multiple
+        // controllers run in the same scene.
         private void CalculateLadders()
         {
             if (!Stats.AllowLadders) return;
 
-            Physics2D.queriesHitTriggers = true; // Ladders are set to Trigger
-            _ladderHit = Physics2D.OverlapBox(_framePosition + (Vector2)_wallDetectionBounds.center, _wallDetectionBounds.size, 0, Stats.LadderLayer);
-
-            Physics2D.queriesHitTriggers = _cachedQueryTriggers;
+            var prevQueryTriggers = Physics2D.queriesHitTriggers;
+            try
+            {
+                Physics2D.queriesHitTriggers = true; // Ladders are set to Trigger
+                _ladderHit = Physics2D.OverlapBox(_framePosition + (Vector2)_wallDetectionBounds.center, _wallDetectionBounds.size, 0, Stats.LadderLayer);
+            }
+            finally
+            {
+                Physics2D.queriesHitTriggers = prevQueryTriggers;
+            }
 
             if (!ClimbingLadder && CanEnterLadder && ShouldMountLadder) ToggleClimbingLadder(true);
             else if (ClimbingLadder && (!_ladderHit || ShouldDismountLadder)) ToggleClimbingLadder(false);
@@ -750,16 +757,20 @@ namespace TarodevController
             SetColliderMode(Crouching ? ColliderMode.Crouching : ColliderMode.Standard);
         }
 
-        // TODO [GLOBAL PHYSICS2D FLAGS] — BUG: restores queriesHitTriggers to _cachedQueryMode
-        // instead of _cachedQueryTriggers. This means after CheckPos runs, queriesHitTriggers
-        // is set to the cached value of queriesStartInColliders — silent global state corruption.
         private bool CheckPos(Vector2 pos, Vector2 size)
         {
-            Physics2D.queriesHitTriggers = false;
-            var hit = Physics2D.OverlapBox(pos, size, 0, Stats.CollisionLayers);
-            //var hit = Physics2D.OverlapCapsule(pos, size - new Vector2(SKIN_WIDTH, 0), _collider.direction, 0, ~Stats.PlayerLayer);
-            Physics2D.queriesHitTriggers = _cachedQueryMode; // BUG: should be _cachedQueryTriggers
-            return !hit;
+            var prevQueryTriggers = Physics2D.queriesHitTriggers;
+            try
+            {
+                Physics2D.queriesHitTriggers = false;
+                var hit = Physics2D.OverlapBox(pos, size, 0, Stats.CollisionLayers);
+                //var hit = Physics2D.OverlapCapsule(pos, size - new Vector2(SKIN_WIDTH, 0), _collider.direction, 0, ~Stats.PlayerLayer);
+                return !hit;
+            }
+            finally
+            {
+                Physics2D.queriesHitTriggers = prevQueryTriggers;
+            }
         }
 
         #endregion
