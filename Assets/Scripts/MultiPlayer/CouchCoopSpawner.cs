@@ -3,6 +3,8 @@ using TarodevController;
 
 public class CouchCoopSpawner : MonoBehaviour
 {
+    public static CouchCoopSpawner Instance { get; private set; }
+
     [Header("Player Prefab")]
     public GameObject playerPrefab;
 
@@ -16,6 +18,18 @@ public class CouchCoopSpawner : MonoBehaviour
     public float pullStrength = 45f;
     public float damping = 6f;
 
+    public GameObject Player1Instance { get; private set; }
+    public GameObject Player2Instance { get; private set; }
+    public RopeTether2D TetherInstance { get; private set; }
+
+    public Vector3 Player1SpawnPosition => player1Spawn != null ? player1Spawn.position : Vector3.zero;
+    public Vector3 Player2SpawnPosition => player2Spawn != null ? player2Spawn.position : Vector3.right * 2f;
+
+    private void Awake()
+    {
+        Instance = this;
+    }
+
     private void Start()
     {
         if (playerPrefab == null)
@@ -24,34 +38,36 @@ public class CouchCoopSpawner : MonoBehaviour
             return;
         }
 
-        Vector3 p1Pos = player1Spawn != null ? player1Spawn.position : Vector3.zero;
-        Vector3 p2Pos = player2Spawn != null ? player2Spawn.position : (Vector3.right * 2f);
+        SpawnPlayers();
+    }
 
-        GameObject p1 = Instantiate(playerPrefab, p1Pos, Quaternion.identity);
-        GameObject p2 = Instantiate(playerPrefab, p2Pos, Quaternion.identity);
+    private void SpawnPlayers()
+    {
+        Player1Instance = Instantiate(playerPrefab, Player1SpawnPosition, Quaternion.identity);
+        Player2Instance = Instantiate(playerPrefab, Player2SpawnPosition, Quaternion.identity);
 
-        p1.name = "Player1";
-        p2.name = "Player2";
+        Player1Instance.name = "Player1";
+        Player2Instance.name = "Player2";
 
-        var input1 = p1.GetComponent<PlayerInput>();
+        var input1 = Player1Instance.GetComponent<PlayerInput>();
         if (input1 != null) input1.SetScheme(PlayerInput.ControlScheme.KeyboardWASD);
 
-        var input2 = p2.GetComponent<PlayerInput>();
+        var input2 = Player2Instance.GetComponent<PlayerInput>();
         if (input2 != null) input2.SetScheme(PlayerInput.ControlScheme.KeyboardArrows);
 
-        PlayerLabelFactory.CreateLabel(p1.transform, "Player 1");
-        PlayerLabelFactory.CreateLabel(p2.transform, "Player 2");
+        PlayerLabelFactory.CreateLabel(Player1Instance.transform, "Player 1");
+        PlayerLabelFactory.CreateLabel(Player2Instance.transform, "Player 2");
 
         if (addTether)
         {
-            var tether = gameObject.AddComponent<RopeTether2D>();
-            tether.playerA = p1.transform;
-            tether.playerB = p2.transform;
-            tether.maxDistance = maxDistance;
-            tether.pullStrength = pullStrength;
-            tether.damping = damping;
-            tether.ropeOffsetA = new Vector3(0f, 0.5f, 0f);
-            tether.ropeOffsetB = new Vector3(0f, 0.5f, 0f);
+            TetherInstance = gameObject.AddComponent<RopeTether2D>();
+            TetherInstance.playerA = Player1Instance.transform;
+            TetherInstance.playerB = Player2Instance.transform;
+            TetherInstance.maxDistance = maxDistance;
+            TetherInstance.pullStrength = pullStrength;
+            TetherInstance.damping = damping;
+            TetherInstance.ropeOffsetA = new Vector3(0f, 0.5f, 0f);
+            TetherInstance.ropeOffsetB = new Vector3(0f, 0.5f, 0f);
         }
     }
 }

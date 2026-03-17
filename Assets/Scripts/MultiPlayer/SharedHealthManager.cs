@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class SharedHealthManager : MonoBehaviour
@@ -16,6 +15,7 @@ public class SharedHealthManager : MonoBehaviour
     [SerializeField] private float damagedOpacity = 0.3f;
 
     private int currentHealth;
+    private bool deathSequenceRunning = false;
 
     private void Awake()
     {
@@ -32,11 +32,12 @@ public class SharedHealthManager : MonoBehaviour
 
     public bool CanTakeDamage()
     {
-        return currentHealth > 0;
+        return currentHealth > 0 && !deathSequenceRunning;
     }
 
-    public void DealSharedDamage(int damage)
+    public void DealSharedDamage(int damage, PlayerHealth damagedPlayer)
     {
+        if (deathSequenceRunning) return;
         if (currentHealth <= 0) return;
 
         currentHealth -= damage;
@@ -46,13 +47,24 @@ public class SharedHealthManager : MonoBehaviour
 
         if (currentHealth <= 0)
         {
-            Die();
+            deathSequenceRunning = true;
+
+            if (DeathTransitionManager.Instance != null)
+            {
+                DeathTransitionManager.Instance.BeginDeathSequence(damagedPlayer);
+            }
+            else
+            {
+                Debug.LogError("No DeathTransitionManager found in scene.");
+            }
         }
     }
 
-    private void Die()
+    public void ResetHealthToMax()
     {
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        currentHealth = maxHealth;
+        deathSequenceRunning = false;
+        UpdateHealthUI();
     }
 
     private void UpdateHealthUI()
@@ -80,4 +92,5 @@ public class SharedHealthManager : MonoBehaviour
 
     public int GetCurrentHealth() => currentHealth;
     public int GetMaxHealth() => maxHealth;
+    public bool IsDeathSequenceRunning() => deathSequenceRunning;
 }

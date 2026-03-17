@@ -24,6 +24,7 @@ public class RopeTether2D : MonoBehaviour
     private Rigidbody2D _rbA;
     private Rigidbody2D _rbB;
     private LineRenderer _lr;
+    private bool _isFrozen = false;
 
     private void Awake()
     {
@@ -31,7 +32,10 @@ public class RopeTether2D : MonoBehaviour
         _lr.positionCount = 2;
     }
 
-    private void Start() => CacheBodies();
+    private void Start()
+    {
+        CacheBodies();
+    }
 
     private void CacheBodies()
     {
@@ -39,11 +43,22 @@ public class RopeTether2D : MonoBehaviour
         _rbB = playerB != null ? playerB.GetComponent<Rigidbody2D>() : null;
     }
 
+    public void SetFrozen(bool frozen)
+    {
+        _isFrozen = frozen;
+
+        if (_lr != null)
+            _lr.enabled = !frozen && drawRope;
+    }
+
     private void FixedUpdate()
     {
+        if (_isFrozen) return;
         if (playerA == null || playerB == null) return;
 
-        if (_rbA == null || _rbB == null) CacheBodies();
+        if (_rbA == null || _rbB == null)
+            CacheBodies();
+
         if (_rbA == null || _rbB == null) return;
 
         Vector2 a = _rbA.position;
@@ -54,13 +69,11 @@ public class RopeTether2D : MonoBehaviour
 
         if (dist <= maxDistance || dist <= 0.0001f) return;
 
-        Vector2 dir = delta / dist;            // A -> B
+        Vector2 dir = delta / dist;
         float overstretch = dist - maxDistance;
 
-        // Pull them together (ropey feel)
         Vector2 pull = dir * (overstretch * pullStrength);
 
-        // Dampen relative velocity along rope axis to reduce jitter
         float relVel = Vector2.Dot(_rbB.linearVelocity - _rbA.linearVelocity, dir);
         Vector2 damp = dir * (relVel * damping);
 
@@ -70,7 +83,7 @@ public class RopeTether2D : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (!drawRope || _lr == null || playerA == null || playerB == null)
+        if (_isFrozen || !drawRope || _lr == null || playerA == null || playerB == null)
         {
             if (_lr != null) _lr.enabled = false;
             return;
