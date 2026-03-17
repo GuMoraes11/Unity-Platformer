@@ -1,49 +1,26 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class LevelWin : MonoBehaviour
 {
-    private readonly HashSet<GameObject> playersInGoal = new HashSet<GameObject>();
     private bool levelComplete = false;
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (!other.CompareTag("Player")) return;
-
-        GameObject rootPlayer = other.transform.root.gameObject;
-        playersInGoal.Add(rootPlayer);
-
-        TryCompleteLevel();
-    }
-
-    private void OnTriggerExit2D(Collider2D other)
-    {
-        if (!other.CompareTag("Player")) return;
-
-        GameObject rootPlayer = other.transform.root.gameObject;
-        playersInGoal.Remove(rootPlayer);
-    }
-
-    private void TryCompleteLevel()
-    {
         if (levelComplete) return;
-
-        GameObject[] allPlayers = GameObject.FindGameObjectsWithTag("Player");
-        if (allPlayers.Length == 0) return;
-
-        // Require all players to be in the flag zone
-        foreach (GameObject player in allPlayers)
-        {
-            if (!playersInGoal.Contains(player))
-                return;
-        }
+        if (!other.CompareTag("Player")) return;
 
         levelComplete = true;
 
         LevelTimer timer = FindObjectOfType<LevelTimer>();
         if (timer != null)
+        {
             timer.StopTimer();
+        }
+        else
+        {
+            Debug.LogWarning("LevelWin: No LevelTimer found in scene.");
+        }
 
         UnlockNewLevel();
 
@@ -55,13 +32,14 @@ public class LevelWin : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("EndLevelMenuManager or LevelTimer not found when completing level.");
+            Debug.LogWarning("LevelWin: EndLevelMenuManager or LevelTimer missing.");
         }
     }
 
     private void UnlockNewLevel()
     {
         int currentIndex = SceneManager.GetActiveScene().buildIndex;
+
         if (currentIndex >= PlayerPrefs.GetInt("ReachedIndex"))
         {
             PlayerPrefs.SetInt("ReachedIndex", currentIndex + 1);
