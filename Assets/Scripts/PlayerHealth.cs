@@ -99,6 +99,8 @@ public class PlayerHealth : MonoBehaviour
         {
             rb.linearVelocity = Vector2.zero;
             rb.angularVelocity = 0f;
+
+            rb.simulated = false;
         }
 
         if (controllerBehaviour != null) controllerBehaviour.enabled = false;
@@ -116,6 +118,7 @@ public class PlayerHealth : MonoBehaviour
 
         if (rb != null)
         {
+            rb.simulated = true; 
             rb.linearVelocity = Vector2.zero;
             rb.angularVelocity = 0f;
         }
