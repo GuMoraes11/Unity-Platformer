@@ -1,36 +1,70 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class LevelWin : MonoBehaviour
 {
+    private readonly HashSet<GameObject> playersInGoal = new HashSet<GameObject>();
+    private bool levelComplete = false;
+
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (other.CompareTag("Player"))
+        if (!other.CompareTag("Player")) return;
+
+        GameObject rootPlayer = other.transform.root.gameObject;
+        playersInGoal.Add(rootPlayer);
+
+        TryCompleteLevel();
+    }
+
+    private void OnTriggerExit2D(Collider2D other)
+    {
+        if (!other.CompareTag("Player")) return;
+
+        GameObject rootPlayer = other.transform.root.gameObject;
+        playersInGoal.Remove(rootPlayer);
+    }
+
+    private void TryCompleteLevel()
+    {
+        if (levelComplete) return;
+
+        GameObject[] allPlayers = GameObject.FindGameObjectsWithTag("Player");
+        if (allPlayers.Length == 0) return;
+
+        // Require all players to be in the flag zone
+        foreach (GameObject player in allPlayers)
         {
-            LevelTimer timer = FindObjectOfType<LevelTimer>();
-            if (timer != null)
-                timer.StopTimer();
+            if (!playersInGoal.Contains(player))
+                return;
+        }
 
-            UnlockNewLevel();
+        levelComplete = true;
 
-            // Show end level menu
-            EndLevelMenuManager endMenu = FindObjectOfType<EndLevelMenuManager>();
-            if (endMenu != null && timer != null)
-            {
-                string grade = timer.GetCurrentGrade(); // Add this method in LevelTimer
-                endMenu.ShowEndLevelMenu(timer.GetCurrentTime(), grade);
-            }
+        LevelTimer timer = FindObjectOfType<LevelTimer>();
+        if (timer != null)
+            timer.StopTimer();
 
-            // Remove scene loading here
+        UnlockNewLevel();
+
+        EndLevelMenuManager endMenu = FindObjectOfType<EndLevelMenuManager>();
+        if (endMenu != null && timer != null)
+        {
+            string grade = timer.GetCurrentGrade();
+            endMenu.ShowEndLevelMenu(timer.GetCurrentTime(), grade);
+        }
+        else
+        {
+            Debug.LogWarning("EndLevelMenuManager or LevelTimer not found when completing level.");
         }
     }
 
-
-    void UnlockNewLevel()
+    private void UnlockNewLevel()
     {
-        if(SceneManager.GetActiveScene().buildIndex>=PlayerPrefs.GetInt("ReachedIndex"))
+        int currentIndex = SceneManager.GetActiveScene().buildIndex;
+        if (currentIndex >= PlayerPrefs.GetInt("ReachedIndex"))
         {
-            PlayerPrefs.SetInt("ReachedIndex", SceneManager.GetActiveScene().buildIndex + 1);
+            PlayerPrefs.SetInt("ReachedIndex", currentIndex + 1);
             PlayerPrefs.SetInt("UnlockedLevel", PlayerPrefs.GetInt("UnlockedLevel", 2) + 1);
             PlayerPrefs.Save();
         }
