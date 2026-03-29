@@ -3,34 +3,46 @@ using UnityEngine.SceneManagement;
 
 public class LevelWin : MonoBehaviour
 {
+    private bool levelComplete = false;
+
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (other.CompareTag("Player"))
+        if (levelComplete) return;
+        if (!other.CompareTag("Player")) return;
+
+        levelComplete = true;
+
+        LevelTimer timer = FindObjectOfType<LevelTimer>();
+        if (timer != null)
         {
-            LevelTimer timer = FindObjectOfType<LevelTimer>();
-            if (timer != null)
-                timer.StopTimer();
+            timer.StopTimer();
+        }
+        else
+        {
+            Debug.LogWarning("LevelWin: No LevelTimer found in scene.");
+        }
 
-            UnlockNewLevel();
+        UnlockNewLevel();
 
-            // Show end level menu
-            EndLevelMenuManager endMenu = FindObjectOfType<EndLevelMenuManager>();
-            if (endMenu != null && timer != null)
-            {
-                string grade = timer.GetCurrentGrade(); // Add this method in LevelTimer
-                endMenu.ShowEndLevelMenu(timer.GetCurrentTime(), grade);
-            }
-
-            // Remove scene loading here
+        EndLevelMenuManager endMenu = FindObjectOfType<EndLevelMenuManager>();
+        if (endMenu != null && timer != null)
+        {
+            string grade = timer.GetCurrentGrade();
+            endMenu.ShowEndLevelMenu(timer.GetCurrentTime(), grade);
+        }
+        else
+        {
+            Debug.LogWarning("LevelWin: EndLevelMenuManager or LevelTimer missing.");
         }
     }
 
-
-    void UnlockNewLevel()
+    private void UnlockNewLevel()
     {
-        if(SceneManager.GetActiveScene().buildIndex>=PlayerPrefs.GetInt("ReachedIndex"))
+        int currentIndex = SceneManager.GetActiveScene().buildIndex;
+
+        if (currentIndex >= PlayerPrefs.GetInt("ReachedIndex"))
         {
-            PlayerPrefs.SetInt("ReachedIndex", SceneManager.GetActiveScene().buildIndex + 1);
+            PlayerPrefs.SetInt("ReachedIndex", currentIndex + 1);
             PlayerPrefs.SetInt("UnlockedLevel", PlayerPrefs.GetInt("UnlockedLevel", 2) + 1);
             PlayerPrefs.Save();
         }
