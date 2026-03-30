@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 5edd81d92238c43729fc60daada65f59
+guid: 8a67b5e3b8d1d4e3a8eff65a1020f102
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -1572391234087474867
-    second: brick_0
+      213: -5488173390977230680
+    second: "Screenshot 2026-03-29 at 2.06.35\u202FPM_0"
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -96,30 +96,17 @@ TextureImporter:
     ignorePlatformSupport: 0
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
-  - serializedVersion: 4
-    buildTarget: WebGL
-    maxTextureSize: 2048
-    resizeAlgorithm: 0
-    textureFormat: -1
-    textureCompression: 1
-    compressionQuality: 50
-    crunchedCompression: 0
-    allowsAlphaSplitting: 0
-    overridden: 0
-    ignorePlatformSupport: 0
-    androidETC2FallbackOverride: 0
-    forceMaximumCompressionQuality_BC6H_BC7: 0
   spriteSheet:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: brick_0
+      name: "Screenshot 2026-03-29 at 2.06.35\u202FPM_0"
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 16
-        height: 16
+        width: 478
+        height: 708
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -128,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: d492744e08ebd2ae0800000000000000
-      internalID: -1572391234087474867
+      spriteID: 8a81d05e06716d3b0800000000000000
+      internalID: -5488173390977230680
       vertices: []
       indices: 
       edges: []
@@ -148,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      brick_0: -1572391234087474867
+      "Screenshot 2026-03-29 at 2.06.35\u202FPM_0": -5488173390977230680
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

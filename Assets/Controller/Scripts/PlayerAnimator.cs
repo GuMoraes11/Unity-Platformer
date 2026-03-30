@@ -440,5 +440,12 @@ namespace TarodevController
         private static readonly int JumpKey = Animator.StringToHash("Jump");
 
         #endregion
+        
+        // -------- SKIN SETTER --------
+        public void SetSkin(Sprite skin)
+        {
+            if (_sprite != null)
+                _sprite.sprite = skin;
+        }
     }
 }

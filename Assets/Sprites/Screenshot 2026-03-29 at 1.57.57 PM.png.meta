@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: b2af72282046746f784b9685795eef9d
+guid: 65adf2705d6f7471aa1aa2961d734cbf
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -2527320162282110523
-    second: brickBase_0
+      213: -148369675924755760
+    second: "Screenshot 2026-03-29 at 1.57.57\u202FPM_0"
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -37,7 +37,7 @@ TextureImporter:
   maxTextureSize: 2048
   textureSettings:
     serializedVersion: 2
-    filterMode: 0
+    filterMode: 1
     aniso: 1
     mipBias: 0
     wrapU: 1
@@ -46,12 +46,12 @@ TextureImporter:
   nPOTScale: 0
   lightmap: 0
   compressionQuality: 50
-  spriteMode: 1
+  spriteMode: 2
   spriteExtrude: 1
   spriteMeshType: 1
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 16
+  spritePixelsToUnits: 100
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -100,13 +100,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: brickBase_0
+      name: "Screenshot 2026-03-29 at 1.57.57\u202FPM_0"
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 16
-        height: 16
+        width: 490
+        height: 724
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 5c10e75e3b72decd0800000000000000
-      internalID: -2527320162282110523
+      spriteID: 0daa01bd092e0fdf0800000000000000
+      internalID: -148369675924755760
       vertices: []
       indices: 
       edges: []
@@ -125,7 +125,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 5e97eb03825dee720800000000000000
+    spriteID: 
     internalID: 0
     vertices: []
     indices: 
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      brickBase_0: -2527320162282110523
+      "Screenshot 2026-03-29 at 1.57.57\u202FPM_0": -148369675924755760
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

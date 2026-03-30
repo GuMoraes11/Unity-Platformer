@@ -41,22 +41,41 @@ public class CouchCoopSpawner : MonoBehaviour
         SpawnPlayers();
     }
 
+
+    private void SetupPlayer(GameObject player, PlayerSetupData data)
+    {
+        player.name = data.playerName;
+
+        // INPUT
+        var input = player.GetComponent<PlayerInput>();
+        if (input != null)
+            input.SetScheme(data.controlScheme);
+
+        // LABEL
+        PlayerLabelFactory.CreateLabel(player.transform, data.playerName);
+
+        // SKIN
+        var animator = player.GetComponentInChildren<TarodevController.PlayerAnimator>();
+        if (animator != null)
+        {
+            var skins = GameSkinDatabase.Instance.skins;
+
+            if (data.skinIndex >= 0 && data.skinIndex < skins.Length)
+            {
+                animator.SetSkin(skins[data.skinIndex]);
+            }
+        }
+    }
+
     private void SpawnPlayers()
     {
         Player1Instance = Instantiate(playerPrefab, Player1SpawnPosition, Quaternion.identity);
         Player2Instance = Instantiate(playerPrefab, Player2SpawnPosition, Quaternion.identity);
 
-        Player1Instance.name = "Player1";
-        Player2Instance.name = "Player2";
+        var players = PlayerSetupManager.Instance.players;
 
-        var input1 = Player1Instance.GetComponent<PlayerInput>();
-        if (input1 != null) input1.SetScheme(PlayerInput.ControlScheme.KeyboardWASD);
-
-        var input2 = Player2Instance.GetComponent<PlayerInput>();
-        if (input2 != null) input2.SetScheme(PlayerInput.ControlScheme.KeyboardArrows);
-
-        PlayerLabelFactory.CreateLabel(Player1Instance.transform, "Player 1");
-        PlayerLabelFactory.CreateLabel(Player2Instance.transform, "Player 2");
+        SetupPlayer(Player1Instance, players[0]);
+        SetupPlayer(Player2Instance, players[1]);
 
         if (addTether)
         {
