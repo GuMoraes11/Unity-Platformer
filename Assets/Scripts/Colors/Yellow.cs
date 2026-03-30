@@ -1,7 +1,7 @@
 using UnityEngine.Rendering.Universal;
 using UnityEngine;
 
-public class Yellow : MonoBehaviour
+public class  Yellow : MonoBehaviour
 {
     [Header("Glow Settings")]
     [SerializeField] private float glowIncreaseSpeed = 1f;

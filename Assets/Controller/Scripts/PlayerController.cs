@@ -76,6 +76,26 @@ namespace TarodevController
             _forceToApplyThisFrame += force;
         }
 
+        /// <summary>
+        /// Queue an exact velocity override for the next simulation step.
+        /// Unlike <see cref="AddFrameForce"/>, this is NOT a force/impulse — it sets
+        /// the player's velocity to exactly <paramref name="velocity"/> once, bypassing
+        /// normal same-frame movement, gravity, and grounding logic.
+        ///
+        /// Designed for deterministic external launchers (bounce pads, cannons, etc.)
+        /// where the caller has already computed the exact desired velocity and does
+        /// not want the movement pipeline to distort it.
+        /// </summary>
+        public void QueueExternalVelocity(Vector2 velocity)
+        {
+            _queuedExternalVelocity = velocity;
+            _hasQueuedExternalVelocity = true;
+
+            // Clear stale jump-cut state so the upward arc after launch is not
+            // penalised by EndJumpEarlyExtraForceMultiplier.
+            _endedJumpEarly = false;
+        }
+
         public void LoadState(ControllerState state)
         {
             RepositionImmediately(state.Position);
@@ -136,6 +156,9 @@ namespace TarodevController
         // DO NOT reorder these calls without understanding the full chain:
         //   1. RemoveTransientVelocity — strip last frame's platform velocity
         //   2. SetFrameData            — snapshot position/velocity for this tick
+        //  2b. (early out) ApplyQueuedExternalVelocity — if an external launcher
+        //      queued an exact velocity, apply it and skip the normal pipeline so
+        //      grounding/gravity/movement cannot distort the launch.
         //   3. CalculateCollisions     — ground raycasts (mutates global Physics2D flags!)
         //   4. CalculateDirection      — derive slope-aware move direction
         //   5. CalculateWalls          — wall detection & grab state
@@ -158,6 +181,28 @@ namespace TarodevController
             RemoveTransientVelocity();
 
             SetFrameData();
+
+            // ── Queued external velocity override ────────────────────────
+            // If an external launcher (bounce pad, cannon, etc.) queued an exact
+            // target velocity, apply it now and skip the normal movement pipeline.
+            // This prevents grounding, gravity, jump logic, and speed modifiers
+            // from distorting the launch on the same frame it is applied.
+            if (_hasQueuedExternalVelocity)
+            {
+                _hasQueuedExternalVelocity = false;
+                SetVelocity(_queuedExternalVelocity);
+                _queuedExternalVelocity = Vector2.zero;
+
+                // Force airborne state so gravity resumes normally next frame.
+                // Without this, a stale _grounded=true would zero Y velocity
+                // on the next tick via ToggleGrounded's SetVelocity(_trimmedFrameVelocity).
+                if (_grounded) ToggleGrounded(false);
+
+                // Still run cleanup and state save so per-frame flags are consumed.
+                CleanFrameData();
+                SaveCharacterState();
+                return;
+            }
 
             CalculateCollisions();
             CalculateDirection();
@@ -611,6 +656,13 @@ namespace TarodevController
         private float _timeJumpWasPressed;
         private Vector2 _forceToApplyThisFrame;
         private bool _endedJumpEarly;
+
+        // ── Queued external velocity override ────────────────────────────
+        // Used by deterministic external launchers (bounce pads, cannons, etc.)
+        // to set an exact target velocity that bypasses the normal movement
+        // pipeline for one simulation step. See QueueExternalVelocity().
+        private bool _hasQueuedExternalVelocity;
+        private Vector2 _queuedExternalVelocity;
         private float _endedJumpForce;
         private int _airJumpsRemaining;
         private bool _wallJumpCoyoteUsable;
@@ -1138,6 +1190,9 @@ namespace TarodevController
 
         // External force
         public void AddFrameForce(Vector2 force, bool resetVelocity = false);
+
+        // External velocity override — deterministic launchers (bounce pads, etc.)
+        public void QueueExternalVelocity(Vector2 velocity);
 
         // Utility
         public void LoadState(ControllerState state);
