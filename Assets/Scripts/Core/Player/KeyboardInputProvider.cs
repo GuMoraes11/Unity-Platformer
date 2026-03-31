@@ -7,7 +7,8 @@ public class KeyboardInputProvider : MonoBehaviour, IFrameInputProvider
     public enum Layout
     {
         WASD,
-        Arrows
+        Arrows,
+        Numpad
     }
 
     [Header("Layout")]
@@ -16,23 +17,95 @@ public class KeyboardInputProvider : MonoBehaviour, IFrameInputProvider
     [Header("Buttons")]
     public bool allowDash = true;
 
-    // You can tweak these if you want different bindings.
-    private Key LeftKey   => layout == Layout.WASD ? Key.A : Key.LeftArrow;
-    private Key RightKey  => layout == Layout.WASD ? Key.D : Key.RightArrow;
-    private Key UpKey     => layout == Layout.WASD ? Key.W : Key.UpArrow;
-    private Key DownKey   => layout == Layout.WASD ? Key.S : Key.DownArrow;
+    private Key LeftKey
+    {
+        get
+        {
+            switch (layout)
+            {
+                case Layout.WASD:   return Key.A;
+                case Layout.Arrows: return Key.LeftArrow;
+                case Layout.Numpad: return Key.Numpad4;
+                default:            return Key.A;
+            }
+        }
+    }
 
-    // Jump/Dash defaults (change if you want)
-    private Key JumpKey   => layout == Layout.WASD ? Key.Space : Key.RightCtrl;
-    private Key DashKey   => layout == Layout.WASD ? Key.LeftShift : Key.RightShift;
+    private Key RightKey
+    {
+        get
+        {
+            switch (layout)
+            {
+                case Layout.WASD:   return Key.D;
+                case Layout.Arrows: return Key.RightArrow;
+                case Layout.Numpad: return Key.Numpad6;
+                default:            return Key.D;
+            }
+        }
+    }
+
+    private Key UpKey
+    {
+        get
+        {
+            switch (layout)
+            {
+                case Layout.WASD:   return Key.W;
+                case Layout.Arrows: return Key.UpArrow;
+                case Layout.Numpad: return Key.Numpad8;
+                default:            return Key.W;
+            }
+        }
+    }
+
+    private Key DownKey
+    {
+        get
+        {
+            switch (layout)
+            {
+                case Layout.WASD:   return Key.S;
+                case Layout.Arrows: return Key.DownArrow;
+                case Layout.Numpad: return Key.Numpad5;
+                default:            return Key.S;
+            }
+        }
+    }
+
+    private Key JumpKey
+    {
+        get
+        {
+            switch (layout)
+            {
+                case Layout.WASD:   return Key.Space;
+                case Layout.Arrows: return Key.RightCtrl;
+                case Layout.Numpad: return Key.Numpad0; // change if you want
+                default:            return Key.Space;
+            }
+        }
+    }
+
+    private Key DashKey
+    {
+        get
+        {
+            switch (layout)
+            {
+                case Layout.WASD:   return Key.LeftShift;
+                case Layout.Arrows: return Key.RightShift;
+                case Layout.Numpad: return Key.NumpadEnter; // change if you want
+                default:            return Key.LeftShift;
+            }
+        }
+    }
 
     public FrameInput Gather()
     {
         var kb = Keyboard.current;
         if (kb == null)
-        {
             return default;
-        }
 
         float x = 0f;
         float y = 0f;
@@ -44,7 +117,6 @@ public class KeyboardInputProvider : MonoBehaviour, IFrameInputProvider
 
         bool jumpHeld = kb[JumpKey].isPressed;
         bool jumpDown = kb[JumpKey].wasPressedThisFrame;
-
         bool dashDown = allowDash && kb[DashKey].wasPressedThisFrame;
 
         return new FrameInput

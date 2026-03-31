@@ -20,6 +20,13 @@ public class PlayerSetupPanel : MonoBehaviour
 
     private PlayerSetupData Data => PlayerSetupManager.Instance.players[playerIndex];
 
+    private readonly PlayerInput.ControlScheme[] allowedSchemes = new PlayerInput.ControlScheme[]
+    {
+        PlayerInput.ControlScheme.KeyboardWASD,
+        PlayerInput.ControlScheme.KeyboardArrows,
+        PlayerInput.ControlScheme.KeyboardNumpad
+    };
+
     private void Start()
     {
         RefreshUI();
@@ -28,15 +35,6 @@ public class PlayerSetupPanel : MonoBehaviour
         readyToggle.onValueChanged.AddListener(OnReadyChanged);
     }
 
-    private PlayerInput.ControlScheme[] allowedSchemes = new PlayerInput.ControlScheme[]
-    {
-        PlayerInput.ControlScheme.KeyboardWASD,
-        PlayerInput.ControlScheme.KeyboardArrows
-        // later you can add:
-        // PlayerInput.ControlScheme.InputSystemActions
-    };
-
-    // -------- NAME --------
     private void OnNameChanged(string value)
     {
         Data.playerName = string.IsNullOrWhiteSpace(value)
@@ -46,13 +44,11 @@ public class PlayerSetupPanel : MonoBehaviour
         RefreshUI();
     }
 
-    // -------- READY --------
     private void OnReadyChanged(bool value)
     {
         Data.isReady = value;
     }
 
-    // -------- CONTROL --------
     public void NextControlScheme()
     {
         SetNextAvailableScheme(1);
@@ -63,7 +59,6 @@ public class PlayerSetupPanel : MonoBehaviour
         SetNextAvailableScheme(-1);
     }
 
-    // -------- SKINS --------
     public void NextSkin()
     {
         Data.skinIndex = (Data.skinIndex + 1) % skins.Length;
@@ -76,7 +71,6 @@ public class PlayerSetupPanel : MonoBehaviour
         RefreshUI();
     }
 
-    // -------- GetControlSchemeDisplayName --------
     private string GetControlSchemeDisplayName(PlayerInput.ControlScheme scheme)
     {
         switch (scheme)
@@ -87,8 +81,11 @@ public class PlayerSetupPanel : MonoBehaviour
             case PlayerInput.ControlScheme.KeyboardArrows:
                 return "Arrow Keys";
 
+            case PlayerInput.ControlScheme.KeyboardNumpad:
+                return "Numpad";
+
             default:
-                return "WASD"; // fallback (never show controller)
+                return "WASD";
         }
     }
 
@@ -98,13 +95,15 @@ public class PlayerSetupPanel : MonoBehaviour
         var otherPlayer = players[1 - playerIndex];
 
         int currentIndex = System.Array.IndexOf(allowedSchemes, Data.controlScheme);
+        if (currentIndex < 0)
+            currentIndex = 0;
 
         for (int i = 1; i <= allowedSchemes.Length; i++)
         {
             int nextIndex = (currentIndex + i * direction + allowedSchemes.Length) % allowedSchemes.Length;
             var candidate = allowedSchemes[nextIndex];
 
-            // skip if other player is using it
+            // Prevent both players from picking the same control scheme
             if (candidate != otherPlayer.controlScheme)
             {
                 Data.controlScheme = candidate;
@@ -115,14 +114,20 @@ public class PlayerSetupPanel : MonoBehaviour
         RefreshUI();
     }
 
-    // -------- UI REFRESH --------
     private void RefreshUI()
     {
         nameInput.text = Data.playerName;
         controlSchemeText.text = GetControlSchemeDisplayName(Data.controlScheme);
 
-        skinPreview.sprite = skins[Data.skinIndex];
-        skinNameText.text = skinNames[Data.skinIndex];
+        if (skins != null && skins.Length > 0 && Data.skinIndex >= 0 && Data.skinIndex < skins.Length)
+        {
+            skinPreview.sprite = skins[Data.skinIndex];
+        }
+
+        if (skinNames != null && skinNames.Length > 0 && Data.skinIndex >= 0 && Data.skinIndex < skinNames.Length)
+        {
+            skinNameText.text = skinNames[Data.skinIndex];
+        }
 
         readyToggle.isOn = Data.isReady;
     }

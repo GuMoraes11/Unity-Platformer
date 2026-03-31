@@ -15,24 +15,26 @@ namespace TarodevController
 
             // Split-keyboard layouts for couch co-op
             KeyboardWASD,
-            KeyboardArrows
+            KeyboardArrows,
+            KeyboardNumpad
         }
 
         [Header("Control Scheme")]
         [SerializeField] private ControlScheme scheme = ControlScheme.InputSystemActions;
 
-        [Header("Keyboard Bindings (used for KeyboardWASD/KeyboardArrows)")]
+        [Header("Keyboard Bindings")]
         [SerializeField] private bool allowDash = true;
 
 #if ENABLE_INPUT_SYSTEM
         private PlayerInputActions _actions;
-        private InputAction _move, _jump, _dash;
+        private InputAction _move;
+        private InputAction _jump;
+        private InputAction _dash;
 #endif
 
         private void Awake()
         {
 #if ENABLE_INPUT_SYSTEM
-            // Keep your existing Input System wiring
             _actions = new PlayerInputActions();
             _move = _actions.Player.Move;
             _jump = _actions.Player.Jump;
@@ -56,13 +58,15 @@ namespace TarodevController
 
         public FrameInput Gather()
         {
-            // If this player is configured for split-keyboard, read directly from Keyboard.
-            if (scheme == ControlScheme.KeyboardWASD || scheme == ControlScheme.KeyboardArrows)
+            // Any split-keyboard layout should read directly from keyboard.
+            if (scheme == ControlScheme.KeyboardWASD ||
+                scheme == ControlScheme.KeyboardArrows ||
+                scheme == ControlScheme.KeyboardNumpad)
             {
                 return GatherKeyboard();
             }
 
-            // Otherwise use your normal action map.
+            // Otherwise use the normal Input System action map.
 #if ENABLE_INPUT_SYSTEM
             return new FrameInput
             {
@@ -72,7 +76,6 @@ namespace TarodevController
                 Move = _move.ReadValue<Vector2>()
             };
 #else
-            // Legacy fallback
             return new FrameInput
             {
                 JumpDown = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.C) || Input.GetButtonDown("Jump"),
@@ -89,22 +92,45 @@ namespace TarodevController
             var kb = Keyboard.current;
             if (kb == null) return default;
 
-            // Layout keys
-            Key left, right, up, down;
-            Key jumpKey, dashKey;
+            Key left;
+            Key right;
+            Key up;
+            Key down;
+            Key jumpKey;
+            Key dashKey;
 
-            if (scheme == ControlScheme.KeyboardWASD)
-			{
-		    	left = Key.A; right = Key.D; up = Key.W; down = Key.S;
-		    	jumpKey = Key.W;
-			    dashKey = Key.LeftShift;
-		}
-			else // KeyboardArrows
-			{
-			    left = Key.LeftArrow; right = Key.RightArrow; up = Key.UpArrow; down = Key.DownArrow;
-			    jumpKey = Key.UpArrow;
-			    dashKey = Key.RightShift;
-			}
+            switch (scheme)
+            {
+                case ControlScheme.KeyboardWASD:
+                    left = Key.A;
+                    right = Key.D;
+                    up = Key.W;
+                    down = Key.S;
+                    jumpKey = Key.W;
+                    dashKey = Key.LeftShift;
+                    break;
+
+                case ControlScheme.KeyboardArrows:
+                    left = Key.LeftArrow;
+                    right = Key.RightArrow;
+                    up = Key.UpArrow;
+                    down = Key.DownArrow;
+                    jumpKey = Key.UpArrow;
+                    dashKey = Key.RightShift;
+                    break;
+
+                case ControlScheme.KeyboardNumpad:
+                    left = Key.Numpad4;
+                    right = Key.Numpad6;
+                    up = Key.Numpad8;
+                    down = Key.Numpad5;
+                    jumpKey = Key.Numpad8;
+                    dashKey = Key.Numpad0;
+                    break;
+
+                default:
+                    return default;
+            }
 
             float x = 0f;
             float y = 0f;
@@ -126,15 +152,19 @@ namespace TarodevController
                 DashDown = dashDown
             };
 #else
-            // If the Input System isn't enabled, you *can’t* split keyboards cleanly like this.
-            // (Old Input Manager doesn't support per-player keyboard separation.)
             return default;
 #endif
         }
 
-        // Optional helper so other scripts can set this at runtime (spawner does this).
-        public void SetScheme(ControlScheme newScheme) => scheme = newScheme;
-        public ControlScheme GetScheme() => scheme;
+        public void SetScheme(ControlScheme newScheme)
+        {
+            scheme = newScheme;
+        }
+
+        public ControlScheme GetScheme()
+        {
+            return scheme;
+        }
     }
 
     public struct FrameInput

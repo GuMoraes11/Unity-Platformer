@@ -107,6 +107,11 @@ public class ColorManager : MonoBehaviour
                 right = KeyCode.RightBracket;
                 break;
 
+            case PlayerInput.ControlScheme.KeyboardNumpad:
+                left = KeyCode.Keypad7;
+                right = KeyCode.Keypad9;
+                break;
+
             default:
                 left = KeyCode.None;
                 right = KeyCode.None;
