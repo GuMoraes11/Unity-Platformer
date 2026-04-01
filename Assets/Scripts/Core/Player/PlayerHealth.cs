@@ -12,6 +12,12 @@ public class PlayerHealth : MonoBehaviour
     [Header("Pop Visuals")]
     [SerializeField] private Transform visualRoot;
 
+    [Header("Death Burst")]
+    [SerializeField] private DeathBurstEffect deathBurstPrefab;
+    [SerializeField] private Color neutralBurstColor = Color.gray;
+    [SerializeField] private Color activeBurstColor = Color.white;
+    [SerializeField] private bool useSpriteColorIfAvailable = true;
+
     private Rigidbody2D rb;
     private bool isInvincible = false;
     private bool isFrozen = false;
@@ -23,6 +29,8 @@ public class PlayerHealth : MonoBehaviour
     private Behaviour inputBehaviour;
 
     private Vector3 defaultVisualScale;
+    private Vector2 lastVelocity;
+    private Color currentBurstColor;
 
     private void Awake()
     {
@@ -37,6 +45,13 @@ public class PlayerHealth : MonoBehaviour
             visualRoot = spriteRenderer != null ? spriteRenderer.transform.parent : transform;
 
         defaultVisualScale = visualRoot.localScale;
+        currentBurstColor = activeBurstColor;
+    }
+
+    private void Update()
+    {
+        if (rb != null && rb.simulated)
+            lastVelocity = rb.linearVelocity;
     }
 
     public void TakeDamage(int damage, Vector2 sourcePosition)
@@ -99,7 +114,6 @@ public class PlayerHealth : MonoBehaviour
         {
             rb.linearVelocity = Vector2.zero;
             rb.angularVelocity = 0f;
-
             rb.simulated = false;
         }
 
@@ -118,7 +132,7 @@ public class PlayerHealth : MonoBehaviour
 
         if (rb != null)
         {
-            rb.simulated = true; 
+            rb.simulated = true;
             rb.linearVelocity = Vector2.zero;
             rb.angularVelocity = 0f;
         }
@@ -140,32 +154,64 @@ public class PlayerHealth : MonoBehaviour
         SetVisualState(Vector3.zero, 0f);
     }
 
-    public IEnumerator PlayPopOut(float duration)
+    public IEnumerator PlayDeathBurst(bool isPrimary, float duration)
     {
+        Vector2 sampledVelocity = lastVelocity;
         FreezeForDeathSequence();
 
+        Color burstColor = ResolveBurstColor();
+
+        Vector2 direction;
+        float intensity;
+        float directionalBias;
+
+        if (sampledVelocity.sqrMagnitude < 0.04f)
+        {
+            direction = Vector2.up;
+            intensity = isPrimary ? 1.0f : 0.8f;
+            directionalBias = isPrimary ? 0.35f : 0.15f;
+        }
+        else
+        {
+            direction = isPrimary
+                ? -sampledVelocity.normalized
+                : sampledVelocity.normalized;
+
+            intensity = isPrimary ? 1.25f : 0.9f;
+            directionalBias = isPrimary ? 0.9f : 0.45f;
+        }
+
+        if (deathBurstPrefab != null)
+        {
+            DeathBurstEffect burst = Instantiate(deathBurstPrefab, transform.position, Quaternion.identity);
+            burst.PlayBurst(burstColor, direction, intensity, directionalBias);
+        }
+
+        // Tiny squash before vanish
         Vector3 startScale = defaultVisualScale;
-        Vector3 expandedScale = defaultVisualScale * 1.18f;
-        float expandDuration = duration * 0.45f;
+        Vector3 squashScale = isPrimary
+            ? new Vector3(defaultVisualScale.x * 1.15f, defaultVisualScale.y * 0.85f, 1f)
+            : new Vector3(defaultVisualScale.x * 1.08f, defaultVisualScale.y * 0.92f, 1f);
+
+        float squashDuration = duration * 0.25f;
+        float vanishDuration = Mathf.Max(0.01f, duration - squashDuration);
 
         float t = 0f;
-        while (t < expandDuration)
+        while (t < squashDuration)
         {
             t += Time.unscaledDeltaTime;
-            float lerp = Mathf.Clamp01(t / expandDuration);
-            SetVisualState(Vector3.Lerp(startScale, expandedScale, lerp), 1f);
+            float lerp = Mathf.Clamp01(t / squashDuration);
+            SetVisualState(Vector3.Lerp(startScale, squashScale, lerp), 1f);
             yield return null;
         }
 
         t = 0f;
-        float shrinkDuration = Mathf.Max(0.01f, duration - expandDuration);
-
-        while (t < shrinkDuration)
+        while (t < vanishDuration)
         {
             t += Time.unscaledDeltaTime;
-            float lerp = Mathf.Clamp01(t / shrinkDuration);
+            float lerp = Mathf.Clamp01(t / vanishDuration);
             float eased = 1f - Mathf.Pow(1f - lerp, 3f);
-            SetVisualState(Vector3.Lerp(expandedScale, Vector3.zero, eased), 1f - eased);
+            SetVisualState(Vector3.Lerp(squashScale, Vector3.zero, eased), 1f - eased);
             yield return null;
         }
 
@@ -202,6 +248,24 @@ public class PlayerHealth : MonoBehaviour
 
         SetVisualState(defaultVisualScale, 1f);
         RestoreAfterRespawn();
+    }
+
+    public void SetBurstColor(Color color)
+    {
+        currentBurstColor = color;
+    }
+
+    public void SetNeutralBurst()
+    {
+        currentBurstColor = neutralBurstColor;
+    }
+
+    private Color ResolveBurstColor()
+    {
+        if (useSpriteColorIfAvailable && spriteRenderer != null)
+            return spriteRenderer.color;
+
+        return currentBurstColor;
     }
 
     private void SetVisualState(Vector3 scale, float alpha)

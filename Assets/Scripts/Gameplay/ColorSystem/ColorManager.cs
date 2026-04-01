@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
-using TarodevController;
+
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 public class ColorManager : MonoBehaviour
 {
@@ -22,6 +25,18 @@ public class ColorManager : MonoBehaviour
     [Header("Platform Groups")]
     [SerializeField] private List<PlatformColorGroup> platformGroups = new List<PlatformColorGroup>();
 
+    [Header("Player 1 Keyboard Keys")]
+    [SerializeField] private KeyCode player1CycleLeftKey = KeyCode.Q;
+    [SerializeField] private KeyCode player1CycleRightKey = KeyCode.E;
+
+    [Header("Player 2 Keyboard Keys")]
+    [SerializeField] private KeyCode player2CycleLeftKey = KeyCode.LeftBracket;
+    [SerializeField] private KeyCode player2CycleRightKey = KeyCode.RightBracket;
+
+    [Header("Numpad Color Keys")]
+    [SerializeField] private KeyCode numpadCycleLeftKey = KeyCode.Keypad7;
+    [SerializeField] private KeyCode numpadCycleRightKey = KeyCode.Keypad9;
+
     [Header("Visual Settings")]
     [Range(0f, 1f)]
     [SerializeField] private float activeAlpha = 1f;
@@ -33,89 +48,152 @@ public class ColorManager : MonoBehaviour
     [SerializeField] private bool startWithPlayer1ColorActive = false;
     [SerializeField] private bool startWithPlayer2ColorActive = false;
 
-    // Full list indices. -1 means no active color for that player.
     private int _player1ActiveGroupIndex = -1;
     private int _player2ActiveGroupIndex = -1;
+    private int _singlePlayerActiveGroupIndex = -1;
 
     private readonly List<int> _player1OwnedIndices = new();
     private readonly List<int> _player2OwnedIndices = new();
+    private readonly List<int> _allValidIndices = new();
+
+    private bool IsSinglePlayer =>
+        PlayerSetupManager.Instance != null && PlayerSetupManager.Instance.IsSinglePlayer;
 
     private void Awake()
     {
         RebuildOwnershipLists();
 
-        _player1ActiveGroupIndex = GetStartupIndex(PlayerOwner.Player1, startWithPlayer1ColorActive);
-        _player2ActiveGroupIndex = GetStartupIndex(PlayerOwner.Player2, startWithPlayer2ColorActive);
+        if (IsSinglePlayer)
+        {
+            _singlePlayerActiveGroupIndex = GetStartupIndexForSinglePlayer(startWithPlayer1ColorActive);
+        }
+        else
+        {
+            _player1ActiveGroupIndex = GetStartupIndex(PlayerOwner.Player1, startWithPlayer1ColorActive);
+            _player2ActiveGroupIndex = GetStartupIndex(PlayerOwner.Player2, startWithPlayer2ColorActive);
+        }
 
         RefreshAllGroups();
     }
 
     private void Update()
     {
-        HandlePlayer1Input();
-        HandlePlayer2Input();
-    }
-
-    private void HandlePlayer1Input()
-    {
-        GetKeysForPlayer(0, out KeyCode left, out KeyCode right);
-
-        if (left != KeyCode.None && Input.GetKeyDown(left))
+        if (IsSinglePlayer)
         {
-            CyclePlayer(PlayerOwner.Player1, -1);
+            HandleSinglePlayerInput();
+            return;
         }
-        else if (right != KeyCode.None && Input.GetKeyDown(right))
+
+        HandlePlayerInput(0, PlayerOwner.Player1);
+
+        // Only read player 2 input if player 2 actually exists
+        if (CouchCoopSpawner.Instance != null && CouchCoopSpawner.Instance.Player2Instance != null)
         {
-            CyclePlayer(PlayerOwner.Player1, +1);
+            HandlePlayerInput(1, PlayerOwner.Player2);
         }
     }
 
-    private void HandlePlayer2Input()
+    private void HandleSinglePlayerInput()
     {
-        GetKeysForPlayer(1, out KeyCode left, out KeyCode right);
+        var scheme = GetPlayerScheme(0);
 
-        if (left != KeyCode.None && Input.GetKeyDown(left))
-        {
-            CyclePlayer(PlayerOwner.Player2, -1);
-        }
-        else if (right != KeyCode.None && Input.GetKeyDown(right))
-        {
-            CyclePlayer(PlayerOwner.Player2, +1);
-        }
+        if (GetCycleLeftPressedForScheme(scheme, 0))
+            CycleSinglePlayer(-1);
+        else if (GetCycleRightPressedForScheme(scheme, 0))
+            CycleSinglePlayer(+1);
     }
 
-    private void GetKeysForPlayer(int playerIndex, out KeyCode left, out KeyCode right)
+    private void HandlePlayerInput(int playerIndex, PlayerOwner owner)
     {
-        left = KeyCode.None;
-        right = KeyCode.None;
+        var scheme = GetPlayerScheme(playerIndex);
+        Debug.Log($"Color Input -> PlayerIndex: {playerIndex}, Owner: {owner}, Scheme: {scheme}");
 
-        if (PlayerSetupManager.Instance == null) return;
-        if (PlayerSetupManager.Instance.players == null) return;
-        if (playerIndex < 0 || playerIndex >= PlayerSetupManager.Instance.players.Length) return;
+        if (GetCycleLeftPressedForScheme(scheme, playerIndex))
+            CyclePlayer(owner, -1);
+        else if (GetCycleRightPressedForScheme(scheme, playerIndex))
+            CyclePlayer(owner, +1);
+    }
 
-        var data = PlayerSetupManager.Instance.players[playerIndex];
-
-        switch (data.controlScheme)
+    private TarodevController.PlayerInput.ControlScheme GetPlayerScheme(int playerIndex)
+    {
+        // Prefer the ACTUAL spawned player's input component
+        if (CouchCoopSpawner.Instance != null)
         {
-            case PlayerInput.ControlScheme.KeyboardWASD:
-                left = KeyCode.Q;
-                right = KeyCode.E;
-                break;
+            GameObject playerObject = null;
 
-            case PlayerInput.ControlScheme.KeyboardArrows:
-                left = KeyCode.LeftBracket;
-                right = KeyCode.RightBracket;
-                break;
+            if (playerIndex == 0)
+                playerObject = CouchCoopSpawner.Instance.Player1Instance;
+            else if (playerIndex == 1)
+                playerObject = CouchCoopSpawner.Instance.Player2Instance;
 
-            case PlayerInput.ControlScheme.KeyboardNumpad:
-                left = KeyCode.Keypad7;
-                right = KeyCode.Keypad9;
-                break;
+            if (playerObject != null)
+            {
+                var input = playerObject.GetComponent<TarodevController.PlayerInput>();
+                if (input != null)
+                    return input.GetScheme();
+            }
+        }
 
+        // Fallback to setup data if needed
+        if (PlayerSetupManager.Instance != null &&
+            PlayerSetupManager.Instance.players != null &&
+            PlayerSetupManager.Instance.players.Length > playerIndex)
+        {
+            return PlayerSetupManager.Instance.players[playerIndex].controlScheme;
+        }
+
+        return TarodevController.PlayerInput.ControlScheme.KeyboardWASD;
+    }
+
+    private bool GetCycleLeftPressedForScheme(TarodevController.PlayerInput.ControlScheme scheme, int playerIndex)
+    {
+        switch (scheme)
+        {
+            case TarodevController.PlayerInput.ControlScheme.KeyboardWASD:
+                return Input.GetKeyDown(player1CycleLeftKey);
+
+            case TarodevController.PlayerInput.ControlScheme.KeyboardArrows:
+                return Input.GetKeyDown(player2CycleLeftKey);
+
+            case TarodevController.PlayerInput.ControlScheme.KeyboardNumpad:
+                return Input.GetKeyDown(numpadCycleLeftKey);
+
+            case TarodevController.PlayerInput.ControlScheme.Gamepad:
+    #if ENABLE_INPUT_SYSTEM
+                return Gamepad.current != null && Gamepad.current.leftShoulder.wasPressedThisFrame;
+    #else
+                return false;
+    #endif
+
+            case TarodevController.PlayerInput.ControlScheme.InputSystemActions:
             default:
-                left = KeyCode.None;
-                right = KeyCode.None;
-                break;
+                return Input.GetKeyDown(player1CycleLeftKey);
+        }
+    }
+
+    private bool GetCycleRightPressedForScheme(TarodevController.PlayerInput.ControlScheme scheme, int playerIndex)
+    {
+        switch (scheme)
+        {
+            case TarodevController.PlayerInput.ControlScheme.KeyboardWASD:
+                return Input.GetKeyDown(player1CycleRightKey);
+
+            case TarodevController.PlayerInput.ControlScheme.KeyboardArrows:
+                return Input.GetKeyDown(player2CycleRightKey);
+
+            case TarodevController.PlayerInput.ControlScheme.KeyboardNumpad:
+                return Input.GetKeyDown(numpadCycleRightKey);
+
+            case TarodevController.PlayerInput.ControlScheme.Gamepad:
+    #if ENABLE_INPUT_SYSTEM
+                return Gamepad.current != null && Gamepad.current.rightShoulder.wasPressedThisFrame;
+    #else
+                return false;
+    #endif
+
+            case TarodevController.PlayerInput.ControlScheme.InputSystemActions:
+            default:
+                return Input.GetKeyDown(player1CycleRightKey);
         }
     }
 
@@ -123,20 +201,21 @@ public class ColorManager : MonoBehaviour
     {
         _player1OwnedIndices.Clear();
         _player2OwnedIndices.Clear();
+        _allValidIndices.Clear();
 
         for (int i = 0; i < platformGroups.Count; i++)
         {
             PlatformColorGroup group = platformGroups[i];
-
             if (group == null || group.platformParent == null)
                 continue;
+
+            _allValidIndices.Add(i);
 
             switch (group.controlledBy)
             {
                 case PlayerOwner.Player1:
                     _player1OwnedIndices.Add(i);
                     break;
-
                 case PlayerOwner.Player2:
                     _player2OwnedIndices.Add(i);
                     break;
@@ -154,6 +233,17 @@ public class ColorManager : MonoBehaviour
             return -1;
 
         return owned[0];
+    }
+
+    private int GetStartupIndexForSinglePlayer(bool shouldStartActive)
+    {
+        if (!shouldStartActive)
+            return -1;
+
+        if (_allValidIndices.Count == 0)
+            return -1;
+
+        return _allValidIndices[0];
     }
 
     private List<int> GetOwnedList(PlayerOwner owner)
@@ -183,11 +273,43 @@ public class ColorManager : MonoBehaviour
             case PlayerOwner.Player1:
                 _player1ActiveGroupIndex = groupIndex;
                 break;
-
             case PlayerOwner.Player2:
                 _player2ActiveGroupIndex = groupIndex;
                 break;
         }
+    }
+
+    public void CycleSinglePlayer(int direction)
+    {
+        if (_allValidIndices.Count == 0)
+            return;
+
+        if (_singlePlayerActiveGroupIndex == -1)
+        {
+            int nextIndex = direction >= 0 ? 0 : _allValidIndices.Count - 1;
+            _singlePlayerActiveGroupIndex = _allValidIndices[nextIndex];
+            RefreshAllGroups();
+            return;
+        }
+
+        int currentIndexInAll = _allValidIndices.IndexOf(_singlePlayerActiveGroupIndex);
+
+        if (currentIndexInAll < 0)
+        {
+            int fallbackIndex = direction >= 0 ? 0 : _allValidIndices.Count - 1;
+            _singlePlayerActiveGroupIndex = _allValidIndices[fallbackIndex];
+            RefreshAllGroups();
+            return;
+        }
+
+        int newIndex = currentIndexInAll + (direction >= 0 ? 1 : -1);
+
+        if (newIndex >= _allValidIndices.Count || newIndex < 0)
+            _singlePlayerActiveGroupIndex = -1;
+        else
+            _singlePlayerActiveGroupIndex = _allValidIndices[newIndex];
+
+        RefreshAllGroups();
     }
 
     public void CyclePlayer(PlayerOwner owner, int direction)
@@ -198,7 +320,6 @@ public class ColorManager : MonoBehaviour
 
         int currentFullIndex = GetActiveIndex(owner);
 
-        // If currently none selected, start at beginning/end depending on direction.
         if (currentFullIndex == -1)
         {
             int nextIndex = direction >= 0 ? 0 : owned.Count - 1;
@@ -209,7 +330,6 @@ public class ColorManager : MonoBehaviour
 
         int currentOwnedListIndex = owned.IndexOf(currentFullIndex);
 
-        // Fallback if something changed in inspector or data got invalid.
         if (currentOwnedListIndex < 0)
         {
             int fallbackIndex = direction >= 0 ? 0 : owned.Count - 1;
@@ -220,15 +340,10 @@ public class ColorManager : MonoBehaviour
 
         int newOwnedListIndex = currentOwnedListIndex + (direction >= 0 ? 1 : -1);
 
-        // Includes "none active" in the loop.
         if (newOwnedListIndex >= owned.Count || newOwnedListIndex < 0)
-        {
             SetActiveIndex(owner, -1);
-        }
         else
-        {
             SetActiveIndex(owner, owned[newOwnedListIndex]);
-        }
 
         RefreshAllGroups();
     }
@@ -241,9 +356,12 @@ public class ColorManager : MonoBehaviour
             if (group == null || group.platformParent == null)
                 continue;
 
-            bool isActive =
-                i == _player1ActiveGroupIndex ||
-                i == _player2ActiveGroupIndex;
+            bool isActive;
+
+            if (IsSinglePlayer)
+                isActive = i == _singlePlayerActiveGroupIndex;
+            else
+                isActive = i == _player1ActiveGroupIndex || i == _player2ActiveGroupIndex;
 
             ApplyGroupState(group.platformParent, isActive);
         }
@@ -284,6 +402,9 @@ public class ColorManager : MonoBehaviour
 
             if (group.platformParent == groupObject)
             {
+                if (IsSinglePlayer)
+                    return i == _singlePlayerActiveGroupIndex;
+
                 return i == _player1ActiveGroupIndex || i == _player2ActiveGroupIndex;
             }
         }
@@ -295,20 +416,26 @@ public class ColorManager : MonoBehaviour
     {
         RebuildOwnershipLists();
 
-        if (_player1ActiveGroupIndex != -1 && !_player1OwnedIndices.Contains(_player1ActiveGroupIndex))
-            _player1ActiveGroupIndex = -1;
+        if (IsSinglePlayer)
+        {
+            if (_singlePlayerActiveGroupIndex != -1 && !_allValidIndices.Contains(_singlePlayerActiveGroupIndex))
+                _singlePlayerActiveGroupIndex = -1;
+        }
+        else
+        {
+            if (_player1ActiveGroupIndex != -1 && !_player1OwnedIndices.Contains(_player1ActiveGroupIndex))
+                _player1ActiveGroupIndex = -1;
 
-        if (_player2ActiveGroupIndex != -1 && !_player2OwnedIndices.Contains(_player2ActiveGroupIndex))
-            _player2ActiveGroupIndex = -1;
+            if (_player2ActiveGroupIndex != -1 && !_player2OwnedIndices.Contains(_player2ActiveGroupIndex))
+                _player2ActiveGroupIndex = -1;
+        }
 
         RefreshAllGroups();
     }
 
     private void OnValidate()
     {
-        if (activeAlpha < 0f) activeAlpha = 0f;
-        if (activeAlpha > 1f) activeAlpha = 1f;
-        if (inactiveAlpha < 0f) inactiveAlpha = 0f;
-        if (inactiveAlpha > 1f) inactiveAlpha = 1f;
+        inactiveAlpha = Mathf.Clamp01(inactiveAlpha);
+        activeAlpha = Mathf.Clamp01(activeAlpha);
     }
 }

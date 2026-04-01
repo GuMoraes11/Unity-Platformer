@@ -8,15 +8,15 @@ public class DeathTransitionManager : MonoBehaviour
 
     [Header("Fade")]
     [SerializeField] private CanvasGroup fadeCanvasGroup;
-    [SerializeField] private float fadeOutDuration = 0.45f;
-    [SerializeField] private float blackHoldDuration = 0.20f;
-    [SerializeField] private float fadeInDuration = 0.45f;
+    [SerializeField] private float fadeOutDuration = 0.28f;
+    [SerializeField] private float blackHoldDuration = 0.16f;
+    [SerializeField] private float fadeInDuration = 0.35f;
 
-    [Header("Pop Timing")]
-    [SerializeField] private float delayBeforeSecondPop = 0.16f;
-    [SerializeField] private float popOutDuration = 0.32f;
-    [SerializeField] private float popInDuration = 0.36f;
-    [SerializeField] private float delayBeforeFade = 0.06f;
+    [Header("Death Burst Timing")]
+    [SerializeField] private float hitstopDuration = 0.06f;
+    [SerializeField] private float delayBeforeSecondBurst = 0.10f;
+    [SerializeField] private float burstDuration = 0.20f;
+    [SerializeField] private float delayBeforeFade = 0.04f;
     [SerializeField] private float delayBeforePopIn = 0.08f;
 
     private bool isRunning = false;
@@ -66,13 +66,19 @@ public class DeathTransitionManager : MonoBehaviour
         if (CouchCoopSpawner.Instance.TetherInstance != null)
             CouchCoopSpawner.Instance.TetherInstance.SetFrozen(true);
 
-        if (firstDeadPlayer != null)
-            yield return StartCoroutine(firstDeadPlayer.PlayPopOut(popOutDuration));
+        // micro hitstop
+        float previousTimeScale = Time.timeScale;
+        Time.timeScale = 0f;
+        yield return new WaitForSecondsRealtime(hitstopDuration);
+        Time.timeScale = previousTimeScale;
 
-        yield return new WaitForSecondsRealtime(delayBeforeSecondPop);
+        if (firstDeadPlayer != null)
+            yield return StartCoroutine(firstDeadPlayer.PlayDeathBurst(true, burstDuration));
+
+        yield return new WaitForSecondsRealtime(delayBeforeSecondBurst);
 
         if (secondPlayer != null)
-            yield return StartCoroutine(secondPlayer.PlayPopOut(popOutDuration));
+            yield return StartCoroutine(secondPlayer.PlayDeathBurst(false, burstDuration));
 
         yield return new WaitForSecondsRealtime(delayBeforeFade);
         yield return StartCoroutine(FadeTo(1f, fadeOutDuration));
@@ -96,10 +102,10 @@ public class DeathTransitionManager : MonoBehaviour
         yield return StartCoroutine(FadeTo(0f, fadeInDuration));
         yield return new WaitForSecondsRealtime(delayBeforePopIn);
 
-        if (p1 != null) StartCoroutine(p1.PlayPopIn(popInDuration));
-        if (p2 != null) StartCoroutine(p2.PlayPopIn(popInDuration));
+        if (p1 != null) StartCoroutine(p1.PlayPopIn(0.36f));
+        if (p2 != null) StartCoroutine(p2.PlayPopIn(0.36f));
 
-        yield return new WaitForSecondsRealtime(popInDuration);
+        yield return new WaitForSecondsRealtime(0.36f);
 
         if (CouchCoopSpawner.Instance.TetherInstance != null)
             CouchCoopSpawner.Instance.TetherInstance.SetFrozen(false);

@@ -11,7 +11,7 @@ Texture2D:
     serializedVersion: 2
     Hash: 00000000000000000000000000000000
   m_IsAlphaChannelOptional: 0
-  serializedVersion: 3
+  serializedVersion: 4
   m_Width: 512
   m_Height: 512
   m_CompleteImageSize: 262144
@@ -2494,7 +2494,6 @@ Material:
   m_ValidKeywords:
   - BEVEL_ON
   - GLOW_ON
-  - UNDERLAY_ON
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0

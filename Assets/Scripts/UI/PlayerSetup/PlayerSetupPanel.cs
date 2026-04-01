@@ -24,15 +24,24 @@ public class PlayerSetupPanel : MonoBehaviour
     {
         PlayerInput.ControlScheme.KeyboardWASD,
         PlayerInput.ControlScheme.KeyboardArrows,
-        PlayerInput.ControlScheme.KeyboardNumpad
+        PlayerInput.ControlScheme.KeyboardNumpad,
+        PlayerInput.ControlScheme.Gamepad
     };
 
     private void Start()
     {
-        RefreshUI();
+        if (nameInput != null)
+            nameInput.onEndEdit.AddListener(OnNameChanged);
 
-        nameInput.onEndEdit.AddListener(OnNameChanged);
-        readyToggle.onValueChanged.AddListener(OnReadyChanged);
+        if (readyToggle != null)
+            readyToggle.onValueChanged.AddListener(OnReadyChanged);
+
+        RefreshUI();
+    }
+
+    private void OnEnable()
+    {
+        RefreshUI();
     }
 
     private void OnNameChanged(string value)
@@ -61,12 +70,16 @@ public class PlayerSetupPanel : MonoBehaviour
 
     public void NextSkin()
     {
+        if (skins == null || skins.Length == 0) return;
+
         Data.skinIndex = (Data.skinIndex + 1) % skins.Length;
         RefreshUI();
     }
 
     public void PreviousSkin()
     {
+        if (skins == null || skins.Length == 0) return;
+
         Data.skinIndex = (Data.skinIndex - 1 + skins.Length) % skins.Length;
         RefreshUI();
     }
@@ -84,26 +97,36 @@ public class PlayerSetupPanel : MonoBehaviour
             case PlayerInput.ControlScheme.KeyboardNumpad:
                 return "Numpad";
 
+            case PlayerInput.ControlScheme.Gamepad:
+                return "Controller";
+
+            case PlayerInput.ControlScheme.InputSystemActions:
             default:
-                return "WASD";
+                return "Input Actions";
         }
     }
 
     private void SetNextAvailableScheme(int direction)
     {
+        int currentIndex = System.Array.IndexOf(allowedSchemes, Data.controlScheme);
+        if (currentIndex < 0) currentIndex = 0;
+
+        if (PlayerSetupManager.Instance != null && PlayerSetupManager.Instance.IsSinglePlayer)
+        {
+            int nextIndex = (currentIndex + direction + allowedSchemes.Length) % allowedSchemes.Length;
+            Data.controlScheme = allowedSchemes[nextIndex];
+            RefreshUI();
+            return;
+        }
+
         var players = PlayerSetupManager.Instance.players;
         var otherPlayer = players[1 - playerIndex];
-
-        int currentIndex = System.Array.IndexOf(allowedSchemes, Data.controlScheme);
-        if (currentIndex < 0)
-            currentIndex = 0;
 
         for (int i = 1; i <= allowedSchemes.Length; i++)
         {
             int nextIndex = (currentIndex + i * direction + allowedSchemes.Length) % allowedSchemes.Length;
             var candidate = allowedSchemes[nextIndex];
 
-            // Prevent both players from picking the same control scheme
             if (candidate != otherPlayer.controlScheme)
             {
                 Data.controlScheme = candidate;
@@ -114,21 +137,26 @@ public class PlayerSetupPanel : MonoBehaviour
         RefreshUI();
     }
 
-    private void RefreshUI()
+    public void RefreshUI()
     {
-        nameInput.text = Data.playerName;
-        controlSchemeText.text = GetControlSchemeDisplayName(Data.controlScheme);
+        if (PlayerSetupManager.Instance == null) return;
 
-        if (skins != null && skins.Length > 0 && Data.skinIndex >= 0 && Data.skinIndex < skins.Length)
+        if (nameInput != null && nameInput.text != Data.playerName)
+            nameInput.text = Data.playerName;
+
+        if (controlSchemeText != null)
+            controlSchemeText.text = GetControlSchemeDisplayName(Data.controlScheme);
+
+        if (skinPreview != null && skins != null && skins.Length > 0)
+            skinPreview.sprite = skins[Mathf.Clamp(Data.skinIndex, 0, skins.Length - 1)];
+
+        if (skinNameText != null && skinNames != null && skinNames.Length > 0)
         {
-            skinPreview.sprite = skins[Data.skinIndex];
+            int clampedIndex = Mathf.Clamp(Data.skinIndex, 0, skinNames.Length - 1);
+            skinNameText.text = skinNames[clampedIndex];
         }
 
-        if (skinNames != null && skinNames.Length > 0 && Data.skinIndex >= 0 && Data.skinIndex < skinNames.Length)
-        {
-            skinNameText.text = skinNames[Data.skinIndex];
-        }
-
-        readyToggle.isOn = Data.isReady;
+        if (readyToggle != null && readyToggle.isOn != Data.isReady)
+            readyToggle.isOn = Data.isReady;
     }
 }

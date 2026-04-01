@@ -4,9 +4,13 @@ using UnityEngine.UI;
 
 public class MenuManager : MonoBehaviour
 {
+    public static MenuManager Instance { get; private set; }
+
     [Header("UI Panels")]
     public GameObject pauseMenuUI;
     public GameObject mainMenuUI;
+    public GameObject gameModeMenuUI;
+    public GameObject characterSelectMenuUI;
     public GameObject levelMenuUI;
 
     [Header("Level Buttons")]
@@ -14,35 +18,96 @@ public class MenuManager : MonoBehaviour
 
     private bool isPaused = false;
 
-    void Start()
+    private void Awake()
+    {
+        // Replace any older menu manager that may have been left alive.
+        if (Instance != null && Instance != this)
+        {
+            Destroy(Instance.gameObject);
+        }
+
+        Instance = this;
+    }
+
+    private void Start()
     {
         Time.timeScale = 1f;
+        isPaused = false;
 
-        // UNLOCK LOGIC:
+        if (pauseMenuUI != null)
+            pauseMenuUI.SetActive(false);
+
         if (levelButtons != null && levelButtons.Length > 0)
         {
-            // Start UnlockedLevel at 2 to unlock Scene 1 (Level 1)
             int unlockedLevel = PlayerPrefs.GetInt("UnlockedLevel", 2);
             for (int i = 0; i < levelButtons.Length; i++)
             {
-                // Level button index 0 maps to Scene 1 (Level 1), index 1 to Scene 2 (Level 2), etc.
                 levelButtons[i].interactable = (i + 1) < unlockedLevel;
             }
         }
+
+        if (mainMenuUI != null || gameModeMenuUI != null || characterSelectMenuUI != null || levelMenuUI != null)
+        {
+            ShowOnly(mainMenuUI);
+        }
     }
 
-    void Update()
+    private void Update()
     {
-        if (pauseMenuUI != null && Input.GetKeyDown(KeyCode.Escape))
+        bool pausePressed = Input.GetKeyDown(KeyCode.Escape);
+
+    #if ENABLE_INPUT_SYSTEM
+        if (UnityEngine.InputSystem.Gamepad.current != null &&
+            UnityEngine.InputSystem.Gamepad.current.startButton.wasPressedThisFrame)
+        {
+            pausePressed = true;
+        }
+    #endif
+
+        if (pauseMenuUI != null && pausePressed)
         {
             if (isPaused) Resume();
             else Pause();
         }
     }
 
-    // Pause Menu
+    private void ShowOnly(GameObject target)
+    {
+        if (mainMenuUI != null) mainMenuUI.SetActive(target == mainMenuUI);
+        if (gameModeMenuUI != null) gameModeMenuUI.SetActive(target == gameModeMenuUI);
+        if (characterSelectMenuUI != null) characterSelectMenuUI.SetActive(target == characterSelectMenuUI);
+        if (levelMenuUI != null) levelMenuUI.SetActive(target == levelMenuUI);
+    }
+
+    public void OpenGameModeMenu()
+    {
+        ShowOnly(gameModeMenuUI);
+    }
+
+    public void OpenCharacterSelectMenu()
+    {
+        ShowOnly(characterSelectMenuUI);
+    }
+
+    public void OpenLevelMenu()
+    {
+        ShowOnly(levelMenuUI);
+    }
+
+    public void BackToMainMenuPanels()
+    {
+        ShowOnly(mainMenuUI);
+    }
+
+    public void BackToGameModeMenu()
+    {
+        ShowOnly(gameModeMenuUI);
+    }
+
     public void Pause()
     {
+        if (pauseMenuUI == null) return;
+
         pauseMenuUI.SetActive(true);
         Time.timeScale = 0f;
         isPaused = true;
@@ -50,6 +115,8 @@ public class MenuManager : MonoBehaviour
 
     public void Resume()
     {
+        if (pauseMenuUI == null) return;
+
         pauseMenuUI.SetActive(false);
         Time.timeScale = 1f;
         isPaused = false;
@@ -58,46 +125,32 @@ public class MenuManager : MonoBehaviour
     public void QuitToMainMenu()
     {
         Time.timeScale = 1f;
-        SceneManager.LoadScene(0); // Main Menu
+        isPaused = false;
+        SceneManager.LoadScene(0);
     }
 
-    // Main Menu
-    public void PlayFirstLevel()
+    public void OpenLevel(int levelId)
     {
-        SceneManager.LoadScene(1); // Level 1
+        Time.timeScale = 1f;
+        isPaused = false;
+        SceneManager.LoadScene("Level " + levelId);
     }
 
     public void QuitGame()
     {
         Debug.Log("Quit Game");
-    #if UNITY_EDITOR
+#if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
-    #else
+#else
         Application.Quit();
-    #endif
+#endif
     }
 
     public void ResetGame()
     {
+        Time.timeScale = 1f;
+        isPaused = false;
         PlayerPrefs.DeleteAll();
-        SceneManager.LoadScene(0); // Reload Main Menu
-    }
-
-    // Level Select
-    public void OpenLevel(int levelId)
-    {
-        SceneManager.LoadScene("Level " + levelId);
-    }
-
-    public void OpenLevelMenu()
-    {
-        mainMenuUI.SetActive(false);
-        levelMenuUI.SetActive(true);
-    }
-
-    public void BackToMainMenu()
-    {
-        levelMenuUI.SetActive(false);
-        mainMenuUI.SetActive(true);
+        SceneManager.LoadScene(0);
     }
 }

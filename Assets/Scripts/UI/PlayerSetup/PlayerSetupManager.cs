@@ -3,9 +3,23 @@ using TarodevController;
 
 public class PlayerSetupManager : MonoBehaviour
 {
+    public enum GameMode
+    {
+        SinglePlayer,
+        Multiplayer
+    }
+
     public static PlayerSetupManager Instance;
 
+    [Header("Mode")]
+    [SerializeField] private GameMode currentGameMode = GameMode.Multiplayer;
+
     public PlayerSetupData[] players = new PlayerSetupData[2];
+
+    public GameMode CurrentGameMode => currentGameMode;
+    public int ActivePlayerCount => currentGameMode == GameMode.SinglePlayer ? 1 : 2;
+    public bool IsSinglePlayer => currentGameMode == GameMode.SinglePlayer;
+    public bool IsMultiplayer => currentGameMode == GameMode.Multiplayer;
 
     private void Awake()
     {
@@ -23,6 +37,9 @@ public class PlayerSetupManager : MonoBehaviour
 
     private void InitializeDefaults()
     {
+        if (players == null || players.Length != 2)
+            players = new PlayerSetupData[2];
+
         for (int i = 0; i < players.Length; i++)
         {
             players[i] = new PlayerSetupData
@@ -36,5 +53,13 @@ public class PlayerSetupManager : MonoBehaviour
                 isReady = false
             };
         }
+    }
+
+    public void SetGameMode(GameMode mode)
+    {
+        currentGameMode = mode;
+
+        for (int i = 0; i < players.Length; i++)
+            players[i].isReady = false;
     }
 }

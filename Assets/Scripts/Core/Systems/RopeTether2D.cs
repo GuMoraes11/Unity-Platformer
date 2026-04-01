@@ -30,11 +30,13 @@ public class RopeTether2D : MonoBehaviour
     {
         _lr = GetComponent<LineRenderer>();
         _lr.positionCount = 2;
+        _lr.enabled = false;
     }
 
     private void Start()
     {
         CacheBodies();
+        UpdateLineVisibility();
     }
 
     private void CacheBodies()
@@ -46,20 +48,34 @@ public class RopeTether2D : MonoBehaviour
     public void SetFrozen(bool frozen)
     {
         _isFrozen = frozen;
+        UpdateLineVisibility();
+    }
 
-        if (_lr != null)
-            _lr.enabled = !frozen && drawRope;
+    private void UpdateLineVisibility()
+    {
+        if (_lr == null) return;
+
+        bool validTargets = playerA != null && playerB != null;
+        _lr.enabled = !_isFrozen && drawRope && validTargets;
     }
 
     private void FixedUpdate()
     {
         if (_isFrozen) return;
-        if (playerA == null || playerB == null) return;
+        if (playerA == null || playerB == null)
+        {
+            UpdateLineVisibility();
+            return;
+        }
 
         if (_rbA == null || _rbB == null)
             CacheBodies();
 
-        if (_rbA == null || _rbB == null) return;
+        if (_rbA == null || _rbB == null)
+        {
+            UpdateLineVisibility();
+            return;
+        }
 
         Vector2 a = _rbA.position;
         Vector2 b = _rbB.position;
@@ -83,9 +99,11 @@ public class RopeTether2D : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (_isFrozen || !drawRope || _lr == null || playerA == null || playerB == null)
+        if (_lr == null) return;
+
+        if (_isFrozen || !drawRope || playerA == null || playerB == null)
         {
-            if (_lr != null) _lr.enabled = false;
+            _lr.enabled = false;
             return;
         }
 

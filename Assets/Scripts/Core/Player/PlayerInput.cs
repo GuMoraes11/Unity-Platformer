@@ -10,13 +10,11 @@ namespace TarodevController
     {
         public enum ControlScheme
         {
-            // Uses your existing Input System action map (Move/Jump/Dash)
             InputSystemActions,
-
-            // Split-keyboard layouts for couch co-op
             KeyboardWASD,
             KeyboardArrows,
-            KeyboardNumpad
+            KeyboardNumpad,
+            Gamepad
         }
 
         [Header("Control Scheme")]
@@ -30,6 +28,11 @@ namespace TarodevController
         private InputAction _move;
         private InputAction _jump;
         private InputAction _dash;
+#endif
+
+#if ENABLE_INPUT_SYSTEM
+private bool _lastLeftTriggerPressed;
+private bool _lastRightTriggerPressed;
 #endif
 
         private void Awake()
@@ -58,32 +61,36 @@ namespace TarodevController
 
         public FrameInput Gather()
         {
-            // Any split-keyboard layout should read directly from keyboard.
-            if (scheme == ControlScheme.KeyboardWASD ||
-                scheme == ControlScheme.KeyboardArrows ||
-                scheme == ControlScheme.KeyboardNumpad)
+            switch (scheme)
             {
-                return GatherKeyboard();
-            }
+                case ControlScheme.KeyboardWASD:
+                case ControlScheme.KeyboardArrows:
+                case ControlScheme.KeyboardNumpad:
+                    return GatherKeyboard();
 
-            // Otherwise use the normal Input System action map.
+                case ControlScheme.Gamepad:
+                    return GatherGamepad();
+
+                case ControlScheme.InputSystemActions:
+                default:
 #if ENABLE_INPUT_SYSTEM
-            return new FrameInput
-            {
-                JumpDown = _jump.WasPressedThisFrame(),
-                JumpHeld = _jump.IsPressed(),
-                DashDown = _dash.WasPressedThisFrame(),
-                Move = _move.ReadValue<Vector2>()
-            };
+                    return new FrameInput
+                    {
+                        JumpDown = _jump.WasPressedThisFrame(),
+                        JumpHeld = _jump.IsPressed(),
+                        DashDown = _dash.WasPressedThisFrame(),
+                        Move = _move.ReadValue<Vector2>()
+                    };
 #else
-            return new FrameInput
-            {
-                JumpDown = Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.C) || Input.GetButtonDown("Jump"),
-                JumpHeld = Input.GetKey(KeyCode.Space) || Input.GetKey(KeyCode.C) || Input.GetButton("Jump"),
-                DashDown = Input.GetKeyDown(KeyCode.LeftShift) || Input.GetButtonDown("Fire3"),
-                Move = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"))
-            };
+                    return new FrameInput
+                    {
+                        JumpDown = Input.GetKeyDown(KeyCode.Space) || Input.GetButtonDown("Jump"),
+                        JumpHeld = Input.GetKey(KeyCode.Space) || Input.GetButton("Jump"),
+                        DashDown = Input.GetKeyDown(KeyCode.LeftShift) || Input.GetButtonDown("Fire3"),
+                        Move = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"))
+                    };
 #endif
+            }
         }
 
         private FrameInput GatherKeyboard()
@@ -92,12 +99,8 @@ namespace TarodevController
             var kb = Keyboard.current;
             if (kb == null) return default;
 
-            Key left;
-            Key right;
-            Key up;
-            Key down;
-            Key jumpKey;
-            Key dashKey;
+            Key left, right, up, down;
+            Key jumpKey, dashKey;
 
             switch (scheme)
             {
@@ -106,6 +109,8 @@ namespace TarodevController
                     right = Key.D;
                     up = Key.W;
                     down = Key.S;
+
+                    // restore your original behavior
                     jumpKey = Key.W;
                     dashKey = Key.LeftShift;
                     break;
@@ -115,6 +120,8 @@ namespace TarodevController
                     right = Key.RightArrow;
                     up = Key.UpArrow;
                     down = Key.DownArrow;
+
+                    // restore your original behavior
                     jumpKey = Key.UpArrow;
                     dashKey = Key.RightShift;
                     break;
@@ -124,6 +131,8 @@ namespace TarodevController
                     right = Key.Numpad6;
                     up = Key.Numpad8;
                     down = Key.Numpad5;
+
+                    // matches the same "up = jump" style as your other schemes
                     jumpKey = Key.Numpad8;
                     dashKey = Key.Numpad0;
                     break;
@@ -140,31 +149,61 @@ namespace TarodevController
             if (kb[down].isPressed) y -= 1f;
             if (kb[up].isPressed) y += 1f;
 
-            bool jumpHeld = kb[jumpKey].isPressed;
-            bool jumpDown = kb[jumpKey].wasPressedThisFrame;
-            bool dashDown = allowDash && kb[dashKey].wasPressedThisFrame;
-
             return new FrameInput
             {
                 Move = new Vector2(x, y),
-                JumpDown = jumpDown,
-                JumpHeld = jumpHeld,
-                DashDown = dashDown
+                JumpDown = kb[jumpKey].wasPressedThisFrame,
+                JumpHeld = kb[jumpKey].isPressed,
+                DashDown = allowDash && kb[dashKey].wasPressedThisFrame
             };
 #else
             return default;
 #endif
         }
 
-        public void SetScheme(ControlScheme newScheme)
+        private FrameInput GatherGamepad()
         {
-            scheme = newScheme;
+        #if ENABLE_INPUT_SYSTEM
+            var gp = Gamepad.current;
+            if (gp == null) return default;
+
+            Vector2 move = gp.leftStick.ReadValue();
+
+            // Optional: let d-pad also work if you want
+            Vector2 dpad = gp.dpad.ReadValue();
+            if (dpad != Vector2.zero)
+                move = dpad;
+
+            // Trigger dash detection
+            bool leftTriggerPressed = gp.leftTrigger.ReadValue() > 0.5f;
+            bool rightTriggerPressed = gp.rightTrigger.ReadValue() > 0.5f;
+
+            bool leftTriggerDown = leftTriggerPressed && !_lastLeftTriggerPressed;
+            bool rightTriggerDown = rightTriggerPressed && !_lastRightTriggerPressed;
+
+            _lastLeftTriggerPressed = leftTriggerPressed;
+            _lastRightTriggerPressed = rightTriggerPressed;
+
+            return new FrameInput
+            {
+                Move = move,
+                JumpDown = gp.buttonSouth.wasPressedThisFrame,
+                JumpHeld = gp.buttonSouth.isPressed,
+
+                // Dash works on either trigger OR the right-facing face button
+                DashDown = allowDash && (
+                    leftTriggerDown ||
+                    rightTriggerDown ||
+                    gp.buttonEast.wasPressedThisFrame
+                )
+            };
+        #else
+            return default;
+        #endif
         }
 
-        public ControlScheme GetScheme()
-        {
-            return scheme;
-        }
+        public void SetScheme(ControlScheme newScheme) => scheme = newScheme;
+        public ControlScheme GetScheme() => scheme;
     }
 
     public struct FrameInput
