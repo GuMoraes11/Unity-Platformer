@@ -55,6 +55,7 @@ public class ColorManager : MonoBehaviour
     private readonly List<int> _player1OwnedIndices = new();
     private readonly List<int> _player2OwnedIndices = new();
     private readonly List<int> _allValidIndices = new();
+    private readonly List<int> _singlePlayerCycleIndices = new();
 
     private bool IsSinglePlayer =>
         PlayerSetupManager.Instance != null && PlayerSetupManager.Instance.IsSinglePlayer;
@@ -86,7 +87,6 @@ public class ColorManager : MonoBehaviour
 
         HandlePlayerInput(0, PlayerOwner.Player1);
 
-        // Only read player 2 input if player 2 actually exists
         if (CouchCoopSpawner.Instance != null && CouchCoopSpawner.Instance.Player2Instance != null)
         {
             HandlePlayerInput(1, PlayerOwner.Player2);
@@ -106,7 +106,6 @@ public class ColorManager : MonoBehaviour
     private void HandlePlayerInput(int playerIndex, PlayerOwner owner)
     {
         var scheme = GetPlayerScheme(playerIndex);
-        Debug.Log($"Color Input -> PlayerIndex: {playerIndex}, Owner: {owner}, Scheme: {scheme}");
 
         if (GetCycleLeftPressedForScheme(scheme, playerIndex))
             CyclePlayer(owner, -1);
@@ -116,7 +115,6 @@ public class ColorManager : MonoBehaviour
 
     private TarodevController.PlayerInput.ControlScheme GetPlayerScheme(int playerIndex)
     {
-        // Prefer the ACTUAL spawned player's input component
         if (CouchCoopSpawner.Instance != null)
         {
             GameObject playerObject = null;
@@ -134,7 +132,6 @@ public class ColorManager : MonoBehaviour
             }
         }
 
-        // Fallback to setup data if needed
         if (PlayerSetupManager.Instance != null &&
             PlayerSetupManager.Instance.players != null &&
             PlayerSetupManager.Instance.players.Length > playerIndex)
@@ -159,11 +156,11 @@ public class ColorManager : MonoBehaviour
                 return Input.GetKeyDown(numpadCycleLeftKey);
 
             case TarodevController.PlayerInput.ControlScheme.Gamepad:
-    #if ENABLE_INPUT_SYSTEM
+#if ENABLE_INPUT_SYSTEM
                 return Gamepad.current != null && Gamepad.current.leftShoulder.wasPressedThisFrame;
-    #else
+#else
                 return false;
-    #endif
+#endif
 
             case TarodevController.PlayerInput.ControlScheme.InputSystemActions:
             default:
@@ -185,11 +182,11 @@ public class ColorManager : MonoBehaviour
                 return Input.GetKeyDown(numpadCycleRightKey);
 
             case TarodevController.PlayerInput.ControlScheme.Gamepad:
-    #if ENABLE_INPUT_SYSTEM
+#if ENABLE_INPUT_SYSTEM
                 return Gamepad.current != null && Gamepad.current.rightShoulder.wasPressedThisFrame;
-    #else
+#else
                 return false;
-    #endif
+#endif
 
             case TarodevController.PlayerInput.ControlScheme.InputSystemActions:
             default:
@@ -202,6 +199,7 @@ public class ColorManager : MonoBehaviour
         _player1OwnedIndices.Clear();
         _player2OwnedIndices.Clear();
         _allValidIndices.Clear();
+        _singlePlayerCycleIndices.Clear();
 
         for (int i = 0; i < platformGroups.Count; i++)
         {
@@ -210,12 +208,14 @@ public class ColorManager : MonoBehaviour
                 continue;
 
             _allValidIndices.Add(i);
+            _singlePlayerCycleIndices.Add(i);
 
             switch (group.controlledBy)
             {
                 case PlayerOwner.Player1:
                     _player1OwnedIndices.Add(i);
                     break;
+
                 case PlayerOwner.Player2:
                     _player2OwnedIndices.Add(i);
                     break;
@@ -240,10 +240,10 @@ public class ColorManager : MonoBehaviour
         if (!shouldStartActive)
             return -1;
 
-        if (_allValidIndices.Count == 0)
+        if (_singlePlayerCycleIndices.Count == 0)
             return -1;
 
-        return _allValidIndices[0];
+        return _singlePlayerCycleIndices[0];
     }
 
     private List<int> GetOwnedList(PlayerOwner owner)
@@ -281,33 +281,33 @@ public class ColorManager : MonoBehaviour
 
     public void CycleSinglePlayer(int direction)
     {
-        if (_allValidIndices.Count == 0)
+        if (_singlePlayerCycleIndices.Count == 0)
             return;
 
         if (_singlePlayerActiveGroupIndex == -1)
         {
-            int nextIndex = direction >= 0 ? 0 : _allValidIndices.Count - 1;
-            _singlePlayerActiveGroupIndex = _allValidIndices[nextIndex];
+            int nextIndex = direction >= 0 ? 0 : _singlePlayerCycleIndices.Count - 1;
+            _singlePlayerActiveGroupIndex = _singlePlayerCycleIndices[nextIndex];
             RefreshAllGroups();
             return;
         }
 
-        int currentIndexInAll = _allValidIndices.IndexOf(_singlePlayerActiveGroupIndex);
+        int currentIndex = _singlePlayerCycleIndices.IndexOf(_singlePlayerActiveGroupIndex);
 
-        if (currentIndexInAll < 0)
+        if (currentIndex < 0)
         {
-            int fallbackIndex = direction >= 0 ? 0 : _allValidIndices.Count - 1;
-            _singlePlayerActiveGroupIndex = _allValidIndices[fallbackIndex];
+            int fallbackIndex = direction >= 0 ? 0 : _singlePlayerCycleIndices.Count - 1;
+            _singlePlayerActiveGroupIndex = _singlePlayerCycleIndices[fallbackIndex];
             RefreshAllGroups();
             return;
         }
 
-        int newIndex = currentIndexInAll + (direction >= 0 ? 1 : -1);
+        int newIndex = currentIndex + (direction >= 0 ? 1 : -1);
 
-        if (newIndex >= _allValidIndices.Count || newIndex < 0)
+        if (newIndex >= _singlePlayerCycleIndices.Count || newIndex < 0)
             _singlePlayerActiveGroupIndex = -1;
         else
-            _singlePlayerActiveGroupIndex = _allValidIndices[newIndex];
+            _singlePlayerActiveGroupIndex = _singlePlayerCycleIndices[newIndex];
 
         RefreshAllGroups();
     }
@@ -418,7 +418,7 @@ public class ColorManager : MonoBehaviour
 
         if (IsSinglePlayer)
         {
-            if (_singlePlayerActiveGroupIndex != -1 && !_allValidIndices.Contains(_singlePlayerActiveGroupIndex))
+            if (_singlePlayerActiveGroupIndex != -1 && !_singlePlayerCycleIndices.Contains(_singlePlayerActiveGroupIndex))
                 _singlePlayerActiveGroupIndex = -1;
         }
         else
