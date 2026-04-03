@@ -53,9 +53,9 @@ MonoBehaviour:
   fadeOutDuration: 0.2
   blackHoldDuration: 0.2
   fadeInDuration: 0.2
-  delayBeforeSecondPop: 0.08
-  popOutDuration: 0.18
-  popInDuration: 0.22
+  hitstopDuration: 0.06
+  delayBeforeSecondBurst: 0.1
+  burstDuration: 0.2
   delayBeforeFade: 0.06
   delayBeforePopIn: 0.08
 --- !u!1 &3842014083203672727
@@ -824,7 +824,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7615660648533270701}
   m_Layer: 0
-  m_Name: Multiplayer
+  m_Name: PlayerSpawner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

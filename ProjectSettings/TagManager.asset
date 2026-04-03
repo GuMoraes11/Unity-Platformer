@@ -6,7 +6,6 @@ TagManager:
   tags:
   - Ground
   - Blue
-  - Orange
   layers:
   - Default
   - TransparentFX
