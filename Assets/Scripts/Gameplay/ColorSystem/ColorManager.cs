@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,6 +8,8 @@ using UnityEngine.InputSystem;
 
 public class ColorManager : MonoBehaviour
 {
+    public static ColorManager Instance { get; private set; }
+
     public enum PlayerOwner
     {
         None,
@@ -20,22 +23,11 @@ public class ColorManager : MonoBehaviour
         public string displayName;
         public GameObject platformParent;
         public PlayerOwner controlledBy = PlayerOwner.None;
+        public Color groupColor = Color.white;
     }
 
     [Header("Platform Groups")]
     [SerializeField] private List<PlatformColorGroup> platformGroups = new List<PlatformColorGroup>();
-
-    [Header("Player 1 Keyboard Keys")]
-    [SerializeField] private KeyCode player1CycleLeftKey = KeyCode.Q;
-    [SerializeField] private KeyCode player1CycleRightKey = KeyCode.E;
-
-    [Header("Player 2 Keyboard Keys")]
-    [SerializeField] private KeyCode player2CycleLeftKey = KeyCode.LeftBracket;
-    [SerializeField] private KeyCode player2CycleRightKey = KeyCode.RightBracket;
-
-    [Header("Numpad Color Keys")]
-    [SerializeField] private KeyCode numpadCycleLeftKey = KeyCode.Keypad7;
-    [SerializeField] private KeyCode numpadCycleRightKey = KeyCode.Keypad9;
 
     [Header("Visual Settings")]
     [Range(0f, 1f)]
@@ -43,6 +35,10 @@ public class ColorManager : MonoBehaviour
 
     [Range(0f, 1f)]
     [SerializeField] private float inactiveAlpha = 0.2f;
+
+    [Header("Shared Color Sync")]
+    [SerializeField] private List<SpriteRenderer> backgroundRenderers = new List<SpriteRenderer>();
+    [SerializeField] private Color neutralColor = Color.gray;
 
     [Header("Startup")]
     [SerializeField] private bool startWithPlayer1ColorActive = false;
@@ -52,29 +48,71 @@ public class ColorManager : MonoBehaviour
     private int _player2ActiveGroupIndex = -1;
     private int _singlePlayerActiveGroupIndex = -1;
 
+    private int _lastVisualGroupIndex = -1;
+
     private readonly List<int> _player1OwnedIndices = new();
     private readonly List<int> _player2OwnedIndices = new();
     private readonly List<int> _allValidIndices = new();
     private readonly List<int> _singlePlayerCycleIndices = new();
 
+    public event Action<Color> OnSharedActiveColorChanged;
+
     private bool IsSinglePlayer =>
         PlayerSetupManager.Instance != null && PlayerSetupManager.Instance.IsSinglePlayer;
 
+    public Color CurrentSharedColor
+    {
+        get
+        {
+            int index = GetCurrentSharedVisualGroupIndex();
+            if (index >= 0 && index < platformGroups.Count && platformGroups[index] != null)
+                return platformGroups[index].groupColor;
+
+            return neutralColor;
+        }
+    }
+
+    private const KeyCode Player1CycleLeftKey = KeyCode.Q;
+    private const KeyCode Player1CycleRightKey = KeyCode.E;
+
+    private const KeyCode Player2CycleLeftKey = KeyCode.LeftBracket;
+    private const KeyCode Player2CycleRightKey = KeyCode.RightBracket;
+
+    private const KeyCode NumpadCycleLeftKey = KeyCode.Keypad7;
+    private const KeyCode NumpadCycleRightKey = KeyCode.Keypad9;
+
     private void Awake()
     {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+
         RebuildOwnershipLists();
 
         if (IsSinglePlayer)
         {
             _singlePlayerActiveGroupIndex = GetStartupIndexForSinglePlayer(startWithPlayer1ColorActive);
+            _lastVisualGroupIndex = _singlePlayerActiveGroupIndex;
         }
         else
         {
             _player1ActiveGroupIndex = GetStartupIndex(PlayerOwner.Player1, startWithPlayer1ColorActive);
             _player2ActiveGroupIndex = GetStartupIndex(PlayerOwner.Player2, startWithPlayer2ColorActive);
+
+            if (_player1ActiveGroupIndex != -1)
+                _lastVisualGroupIndex = _player1ActiveGroupIndex;
+            else if (_player2ActiveGroupIndex != -1)
+                _lastVisualGroupIndex = _player2ActiveGroupIndex;
+            else
+                _lastVisualGroupIndex = -1;
         }
 
         RefreshAllGroups();
+        RefreshSharedColorVisuals();
     }
 
     private void Update()
@@ -147,13 +185,13 @@ public class ColorManager : MonoBehaviour
         switch (scheme)
         {
             case TarodevController.PlayerInput.ControlScheme.KeyboardWASD:
-                return Input.GetKeyDown(player1CycleLeftKey);
+                return Input.GetKeyDown(Player1CycleLeftKey);
 
             case TarodevController.PlayerInput.ControlScheme.KeyboardArrows:
-                return Input.GetKeyDown(player2CycleLeftKey);
+                return Input.GetKeyDown(Player2CycleLeftKey);
 
             case TarodevController.PlayerInput.ControlScheme.KeyboardNumpad:
-                return Input.GetKeyDown(numpadCycleLeftKey);
+                return Input.GetKeyDown(NumpadCycleLeftKey);
 
             case TarodevController.PlayerInput.ControlScheme.Gamepad:
 #if ENABLE_INPUT_SYSTEM
@@ -164,7 +202,7 @@ public class ColorManager : MonoBehaviour
 
             case TarodevController.PlayerInput.ControlScheme.InputSystemActions:
             default:
-                return Input.GetKeyDown(player1CycleLeftKey);
+                return Input.GetKeyDown(Player1CycleLeftKey);
         }
     }
 
@@ -173,13 +211,13 @@ public class ColorManager : MonoBehaviour
         switch (scheme)
         {
             case TarodevController.PlayerInput.ControlScheme.KeyboardWASD:
-                return Input.GetKeyDown(player1CycleRightKey);
+                return Input.GetKeyDown(Player1CycleRightKey);
 
             case TarodevController.PlayerInput.ControlScheme.KeyboardArrows:
-                return Input.GetKeyDown(player2CycleRightKey);
+                return Input.GetKeyDown(Player2CycleRightKey);
 
             case TarodevController.PlayerInput.ControlScheme.KeyboardNumpad:
-                return Input.GetKeyDown(numpadCycleRightKey);
+                return Input.GetKeyDown(NumpadCycleRightKey);
 
             case TarodevController.PlayerInput.ControlScheme.Gamepad:
 #if ENABLE_INPUT_SYSTEM
@@ -190,7 +228,7 @@ public class ColorManager : MonoBehaviour
 
             case TarodevController.PlayerInput.ControlScheme.InputSystemActions:
             default:
-                return Input.GetKeyDown(player1CycleRightKey);
+                return Input.GetKeyDown(Player1CycleRightKey);
         }
     }
 
@@ -288,7 +326,9 @@ public class ColorManager : MonoBehaviour
         {
             int nextIndex = direction >= 0 ? 0 : _singlePlayerCycleIndices.Count - 1;
             _singlePlayerActiveGroupIndex = _singlePlayerCycleIndices[nextIndex];
+            _lastVisualGroupIndex = _singlePlayerActiveGroupIndex;
             RefreshAllGroups();
+            RefreshSharedColorVisuals();
             return;
         }
 
@@ -298,7 +338,9 @@ public class ColorManager : MonoBehaviour
         {
             int fallbackIndex = direction >= 0 ? 0 : _singlePlayerCycleIndices.Count - 1;
             _singlePlayerActiveGroupIndex = _singlePlayerCycleIndices[fallbackIndex];
+            _lastVisualGroupIndex = _singlePlayerActiveGroupIndex;
             RefreshAllGroups();
+            RefreshSharedColorVisuals();
             return;
         }
 
@@ -309,7 +351,9 @@ public class ColorManager : MonoBehaviour
         else
             _singlePlayerActiveGroupIndex = _singlePlayerCycleIndices[newIndex];
 
+        _lastVisualGroupIndex = _singlePlayerActiveGroupIndex;
         RefreshAllGroups();
+        RefreshSharedColorVisuals();
     }
 
     public void CyclePlayer(PlayerOwner owner, int direction)
@@ -324,7 +368,9 @@ public class ColorManager : MonoBehaviour
         {
             int nextIndex = direction >= 0 ? 0 : owned.Count - 1;
             SetActiveIndex(owner, owned[nextIndex]);
+            _lastVisualGroupIndex = owned[nextIndex];
             RefreshAllGroups();
+            RefreshSharedColorVisuals();
             return;
         }
 
@@ -334,18 +380,27 @@ public class ColorManager : MonoBehaviour
         {
             int fallbackIndex = direction >= 0 ? 0 : owned.Count - 1;
             SetActiveIndex(owner, owned[fallbackIndex]);
+            _lastVisualGroupIndex = owned[fallbackIndex];
             RefreshAllGroups();
+            RefreshSharedColorVisuals();
             return;
         }
 
         int newOwnedListIndex = currentOwnedListIndex + (direction >= 0 ? 1 : -1);
 
         if (newOwnedListIndex >= owned.Count || newOwnedListIndex < 0)
+        {
             SetActiveIndex(owner, -1);
+            _lastVisualGroupIndex = GetAnyRemainingActiveGroupIndex();
+        }
         else
+        {
             SetActiveIndex(owner, owned[newOwnedListIndex]);
+            _lastVisualGroupIndex = owned[newOwnedListIndex];
+        }
 
         RefreshAllGroups();
+        RefreshSharedColorVisuals();
     }
 
     public void RefreshAllGroups()
@@ -389,6 +444,52 @@ public class ColorManager : MonoBehaviour
         }
     }
 
+    private int GetCurrentSharedVisualGroupIndex()
+    {
+        if (IsSinglePlayer)
+            return _singlePlayerActiveGroupIndex;
+
+        if (_lastVisualGroupIndex != -1)
+            return _lastVisualGroupIndex;
+
+        if (_player1ActiveGroupIndex != -1)
+            return _player1ActiveGroupIndex;
+
+        if (_player2ActiveGroupIndex != -1)
+            return _player2ActiveGroupIndex;
+
+        return -1;
+    }
+
+    private int GetAnyRemainingActiveGroupIndex()
+    {
+        if (IsSinglePlayer)
+            return _singlePlayerActiveGroupIndex;
+
+        if (_player1ActiveGroupIndex != -1)
+            return _player1ActiveGroupIndex;
+
+        if (_player2ActiveGroupIndex != -1)
+            return _player2ActiveGroupIndex;
+
+        return -1;
+    }
+
+    private void RefreshSharedColorVisuals()
+    {
+        Color targetColor = CurrentSharedColor;
+
+        for (int i = 0; i < backgroundRenderers.Count; i++)
+        {
+            if (backgroundRenderers[i] == null)
+                continue;
+
+            backgroundRenderers[i].color = targetColor;
+        }
+
+        OnSharedActiveColorChanged?.Invoke(targetColor);
+    }
+
     public bool IsGroupActive(GameObject groupObject)
     {
         if (groupObject == null)
@@ -420,6 +521,8 @@ public class ColorManager : MonoBehaviour
         {
             if (_singlePlayerActiveGroupIndex != -1 && !_singlePlayerCycleIndices.Contains(_singlePlayerActiveGroupIndex))
                 _singlePlayerActiveGroupIndex = -1;
+
+            _lastVisualGroupIndex = _singlePlayerActiveGroupIndex;
         }
         else
         {
@@ -428,9 +531,12 @@ public class ColorManager : MonoBehaviour
 
             if (_player2ActiveGroupIndex != -1 && !_player2OwnedIndices.Contains(_player2ActiveGroupIndex))
                 _player2ActiveGroupIndex = -1;
+
+            _lastVisualGroupIndex = GetAnyRemainingActiveGroupIndex();
         }
 
         RefreshAllGroups();
+        RefreshSharedColorVisuals();
     }
 
     private void OnValidate()
