@@ -21,6 +21,7 @@ public class PlayerHealth : MonoBehaviour
     private Rigidbody2D rb;
     private bool isInvincible = false;
     private bool isFrozen = false;
+    private bool externalInvulnerable = false;
 
     private SpriteRenderer[] allRenderers;
     private Collider2D[] allColliders;
@@ -58,6 +59,7 @@ public class PlayerHealth : MonoBehaviour
     {
         if (isFrozen) return;
         if (isInvincible) return;
+        if (externalInvulnerable) return;
 
         if (SharedHealthManager.Instance == null)
         {
@@ -187,7 +189,6 @@ public class PlayerHealth : MonoBehaviour
             burst.PlayBurst(burstColor, direction, intensity, directionalBias);
         }
 
-        // Tiny squash before vanish
         Vector3 startScale = defaultVisualScale;
         Vector3 squashScale = isPrimary
             ? new Vector3(defaultVisualScale.x * 1.15f, defaultVisualScale.y * 0.85f, 1f)
@@ -258,6 +259,16 @@ public class PlayerHealth : MonoBehaviour
     public void SetNeutralBurst()
     {
         currentBurstColor = neutralBurstColor;
+    }
+
+    public void SetExternalInvulnerable(bool value)
+    {
+        externalInvulnerable = value;
+    }
+
+    public bool IsExternallyInvulnerable()
+    {
+        return externalInvulnerable;
     }
 
     private Color ResolveBurstColor()

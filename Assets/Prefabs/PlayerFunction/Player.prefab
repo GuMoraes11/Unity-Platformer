@@ -19970,6 +19970,7 @@ GameObject:
   - component: {fileID: 5731089695359280883}
   - component: {fileID: 7239625230522110165}
   - component: {fileID: 6857956756600191399}
+  - component: {fileID: 1930895386605291972}
   m_Layer: 7
   m_Name: Player
   m_TagString: Player
@@ -20186,6 +20187,27 @@ MonoBehaviour:
   neutralBurstColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   activeBurstColor: {r: 1, g: 1, b: 1, a: 1}
   useSpriteColorIfAvailable: 1
+--- !u!114 &1930895386605291972
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3054942120541986084}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8e1877c7a16b540b286a4cf40277feeb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AdminFlyNoClip
+  toggleKey: 4
+  flySpeed: 15
+  fastMultiplier: 5
+  slowMultiplier: 0.4
+  useSeparateRiseDescendKeys: 1
+  riseKey: 19
+  descendKey: 31
+  freezeRopeTetherWhileFlying: 1
+  zeroVelocityOnExit: 1
 --- !u!1 &3054942120628204824
 GameObject:
   m_ObjectHideFlags: 0
@@ -35142,7 +35164,7 @@ Transform:
   m_GameObject: {fileID: 4265839104231159613}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -25}
+  m_LocalPosition: {x: 1.2176282, y: -28.824001, z: -25}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -35745,7 +35767,7 @@ MonoBehaviour:
       Offset: {x: 0, y: 0}
   CenterOnActivate: 1
   TargetOffset: {x: 0, y: 1, z: 0}
-  Damping: {x: 1, y: 1, z: 1}
+  Damping: {x: 0.25, y: 0.25, z: 0.25}
   Lookahead:
     Enabled: 0
     Time: 0
