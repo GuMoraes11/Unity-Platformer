@@ -16,20 +16,6 @@ The game is built as a capstone-style Unity project, with a focus on combining g
 
 ---
 
-## Tech Stack
-
-| Area | Tools |
-|---|---|
-| Engine | Unity |
-| Programming | C# |
-| Gameplay | Unity Physics and Collision |
-| Input | Keyboard input |
-| Multiplayer | Local / two-player functionality |
-| Build Target | WebGL |
-| Version Control | Git and GitHub |
-
----
-
 ## Features
 
 ### Multiplayer Support
